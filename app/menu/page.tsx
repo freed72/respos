@@ -97,14 +97,7 @@ export default function ModernDigitalMenuPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-
-  // Default to list view on mobile devices (< 768px)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setViewMode('list');
-    }
-  }, []);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
   // Slide-up Drawers States for Filters
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
