@@ -99,6 +99,21 @@ export default function ModernDigitalMenuPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
+  // Sync search query and category from URL params if directed from Home or external links
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const query = params.get('search');
+      if (query) {
+        setSearchQuery(query);
+      }
+      const category = params.get('category');
+      if (category) {
+        setSelectedCategory(category);
+      }
+    }
+  }, []);
+
   // Slide-up Drawers States for Filters
   const [categoryDrawerOpen, setCategoryDrawerOpen] = useState(false);
   const [dietaryDrawerOpen, setDietaryDrawerOpen] = useState(false);

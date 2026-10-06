@@ -22,9 +22,9 @@ export const metadata: Metadata = {
     'Experience the culinary heritage of The Royal Palette. Featuring digital QR menu, staff POS terminal with automated cash drawer integration, and royal VIP rewards in Bangladeshi Taka (৳).',
   keywords: [
     'The Royal Palette',
-    'Restaurant POS Dhaka',
+    'Restaurant POS Mongla',
     'Digital Menu Bangladesh',
-    'Luxury Dining Gulshan',
+    'Luxury Dining Khulna',
     'Loyalty Rewards BDT',
   ],
 };

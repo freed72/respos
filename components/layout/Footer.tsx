@@ -3,20 +3,23 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { MapPin, Phone, Mail, Clock, Crown, ShieldCheck, Sparkles } from 'lucide-react';
+import { MapPin, Phone, Clock, Crown } from 'lucide-react';
 import { useRestaurantStore } from '@/lib/store';
 
 export function Footer() {
   const { settings } = useRestaurantStore();
 
   return (
-    <footer className="w-full bg-[#f8f8f8] border-t border-slate-200 text-slate-600 text-sm mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          {/* Brand Col */}
-          <div className="space-y-4 md:col-span-1">
-            <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-[#000f50]/20 shadow-xs">
+    <footer className="w-full bg-[#010617] text-slate-400 text-xs mt-auto border-t border-white/10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+        {/* Main Clean Row */}
+        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-8 text-center md:text-left">
+
+          {/* Brand Info */}
+          <div className="space-y-2.5 max-w-sm">
+            <div className="flex items-center justify-center md:justify-start gap-2.5">
+              <div className="relative w-8 h-8 rounded-xl overflow-hidden border border-amber-400/30">
                 <Image
                   src="/images/logo.jpeg"
                   alt="The Royal Palette"
@@ -24,104 +27,62 @@ export function Footer() {
                   className="object-cover"
                 />
               </div>
-              <span className="text-lg font-black text-[#000f50] uppercase">
+              <span className="text-base font-black text-white uppercase tracking-tight">
                 The Royal Palette
               </span>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              {settings.tagline}
+            <p className="text-slate-400 font-light leading-relaxed">
+              Authentic Dum-Pukht & fine Mughlai dining at BNS Mongla, Khulna.
             </p>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#000f50]/10 text-[#000f50] border border-[#000f50]/20">
-              <Crown className="w-3.5 h-3.5 text-[#000f50]" />
-              <span>Royal VIP Hospitality</span>
+            <div className="flex items-center justify-center md:justify-start gap-4 text-[11px] text-slate-400 pt-1">
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                <span>{settings.address || '123, BNS Mongla, Khulna'}</span>
+              </span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Phone className="w-3.5 h-3.5 text-amber-400" />
+                <span>{settings.phone || '01712345678'}</span>
+              </span>
             </div>
           </div>
 
-          {/* Quick Nav */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-[#000f50] uppercase tracking-wider font-mono">
-              System Modules
-            </h4>
-            <ul className="space-y-2 text-xs">
-              <li>
-                <Link href="/menu" className="hover:text-[#000f50] font-medium transition flex items-center gap-1.5">
-                  <Sparkles className="w-3 h-3 text-[#000f50]" /> Digital Guest Menu
-                </Link>
-              </li>
-              <li>
-                <Link href="/pos" className="hover:text-[#000f50] font-medium transition">
-                  Staff POS & Terminal
-                </Link>
-              </li>
-              <li>
-                <Link href="/loyalty" className="hover:text-[#000f50] font-medium transition">
-                  Royal Loyalty & Points
-                </Link>
-              </li>
-              <li>
-                <Link href="/admin" className="hover:text-[#000f50] font-medium transition">
-                  Admin Back-Office
-                </Link>
-              </li>
-            </ul>
+          {/* Quick Nav Links */}
+          <div className="flex flex-wrap justify-center gap-6 sm:gap-8 font-medium text-slate-300">
+            <Link href="/menu" className="hover:text-amber-300 transition-colors">
+              Digital Menu
+            </Link>
+            <Link href="/loyalty" className="hover:text-amber-300 transition-colors flex items-center gap-1">
+              <Crown className="w-3.5 h-3.5 text-amber-400" />
+              <span>VIP Rewards</span>
+            </Link>
           </div>
 
-          {/* Contact & Location */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-[#000f50] uppercase tracking-wider font-mono">
-              Location & Contact
-            </h4>
-            <ul className="space-y-2 text-xs text-slate-600">
-              <li className="flex items-start gap-2">
-                <MapPin className="w-4 h-4 text-[#000f50] shrink-0 mt-0.5" />
-                <span>{settings.address}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-[#000f50] shrink-0" />
-                <span>{settings.phone}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-[#000f50] shrink-0" />
-                <span>{settings.email}</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Operating Hours & Hardware */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-[#000f50] uppercase tracking-wider font-mono">
-              Dining Hours & Hardware
-            </h4>
-            <div className="p-3.5 rounded-xl bg-white border border-slate-200 text-xs space-y-2 shadow-xs">
-              <div className="flex items-center justify-between text-slate-800 font-semibold">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-[#000f50]" /> Lunch:
-                </span>
-                <span>12:00 PM – 4:00 PM</span>
-              </div>
-              <div className="flex items-center justify-between text-slate-800 font-semibold">
-                <span className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-[#000f50]" /> Dinner:
-                </span>
-                <span>6:30 PM – 11:30 PM</span>
-              </div>
-              <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] text-emerald-700 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>ESC/POS 24V Cash Drawer Enabled</span>
-              </div>
+          {/* Operating Hours */}
+          <div className="space-y-1.5 text-center md:text-right">
+            <div className="flex items-center justify-center md:justify-end gap-1.5 text-slate-200 font-semibold">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Dining Hours</span>
             </div>
+            <p className="text-slate-400 font-light">Lunch: 12:00 PM – 4:00 PM</p>
+            <p className="text-slate-400 font-light">Dinner: 6:30 PM – 11:30 PM</p>
           </div>
+
         </div>
 
-        <div className="mt-8 pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        {/* Bottom Clean Divider */}
+        <div className="mt-8 pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
           <p>© {new Date().getFullYear()} The Royal Palette. All rights reserved.</p>
-          <div className="flex items-center gap-4 text-slate-500">
-            <span>Currency: <strong>BDT (৳)</strong></span>
+          <div className="flex items-center gap-3">
+            <span>Currency: <strong className="text-slate-300">BDT (৳)</strong></span>
             <span>•</span>
             <span>VAT BIN: {settings.binNumber}</span>
           </div>
         </div>
+
       </div>
     </footer>
   );
 }
+
+

@@ -10,11 +10,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isPOS = pathname?.startsWith('/pos');
   const isDigitalMenu = pathname?.startsWith('/menu');
+  const isAdmin = pathname?.startsWith('/admin');
+  const isKDS = pathname?.startsWith('/kds');
 
-  if (isPOS || isDigitalMenu) {
-    // Dedicated Standalone POS or Modern Digital Tabletop Menu - Clean standalone viewport without global website header/footer
+  if (isPOS || isDigitalMenu || isAdmin || isKDS) {
+    // Dedicated Standalone POS, Digital Menu, Admin Dashboard, or KDS Viewport
     return (
-      <div className="min-h-screen bg-[#f8f9fc] text-slate-900 flex flex-col font-sans selection:bg-[#000f50] selection:text-white">
+      <div className="min-h-screen bg-[#090d16] text-slate-100 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
         <main className="flex-1 flex flex-col">
           {children}
         </main>
@@ -24,10 +26,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Standard Website / Customer / Admin Layout
+  const isHome = pathname === '/';
+  const isLoyalty = pathname?.startsWith('/loyalty');
+
+  // Standard Website / Customer Pages Layout
   return (
     <div className="min-h-screen bg-[#f8f8f8] text-slate-900 flex flex-col font-sans selection:bg-[#000f50] selection:text-white">
-      <Navbar />
+      {!isHome && !isLoyalty && <Navbar />}
       <main className="flex-1 flex flex-col">{children}</main>
       <Footer />
       {/* Global Hardware Visualizer */}
@@ -35,3 +40,4 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

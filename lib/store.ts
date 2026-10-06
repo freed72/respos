@@ -26,13 +26,13 @@ import { triggerCashDrawer } from './hardware/cashDrawer';
 import { insforge } from './insforge';
 
 const STORAGE_KEYS = {
-  PRODUCTS: 'trp_products_v1',
-  CATEGORIES: 'trp_categories_v1',
-  TABLES: 'trp_tables_v1',
-  CUSTOMERS: 'trp_customers_v1',
-  ORDERS: 'trp_orders_v1',
-  SETTINGS: 'trp_settings_v1',
-  DRAWER_LOGS: 'trp_drawer_logs_v1',
+  PRODUCTS: 'trp_products_v2',
+  CATEGORIES: 'trp_categories_v2',
+  TABLES: 'trp_tables_v2',
+  CUSTOMERS: 'trp_customers_v2',
+  ORDERS: 'trp_orders_v2',
+  SETTINGS: 'trp_settings_v2',
+  DRAWER_LOGS: 'trp_drawer_logs_v2',
 };
 
 export interface DrawerLogEntry {
@@ -55,133 +55,9 @@ let state = {
   initialized: false,
 };
 
-// Seed initial sample past orders for instant rich dashboard analytics if offline/empty
+// Sample orders initialized as empty clean slate for testing
 function getInitialSampleOrders(): Order[] {
-  const now = Date.now();
-  return [
-    {
-      id: 'ord-101',
-      orderNumber: 'TRP-1001',
-      orderType: 'DINE_IN',
-      tableId: 'tbl-2',
-      tableNumber: 'T-02',
-      status: 'COMPLETED',
-      customerId: 'cust-1',
-      customerName: 'Farhan Rahman',
-      customerPhone: '01711223344',
-      items: [
-        {
-          id: 'item-1',
-          productId: 'prod-1',
-          productName: 'Grand Shahi Mutton Kacchi',
-          unitPrice: 680,
-          quantity: 2,
-          totalPrice: 1360,
-        },
-        {
-          id: 'item-2',
-          productId: 'prod-11',
-          productName: 'Traditional Saffron Borhani',
-          unitPrice: 180,
-          quantity: 2,
-          totalPrice: 360,
-        },
-      ],
-      subtotal: 1720,
-      discountAmount: 0,
-      taxAmount: 0,
-      serviceChargeAmount: 0,
-      tipAmount: 0,
-      totalAmount: 1720,
-      pointsEarned: 56,
-      pointsRedeemed: 0,
-      pointsDiscountValue: 0,
-      paymentStatus: 'PAID',
-      paymentMethod: 'CARD',
-      createdAt: new Date(now - 3600000 * 3).toISOString(),
-      completedAt: new Date(now - 3600000 * 2).toISOString(),
-    },
-    {
-      id: 'ord-102',
-      orderNumber: 'TRP-1002',
-      orderType: 'DINE_IN',
-      tableId: 'tbl-4',
-      tableNumber: 'T-04',
-      status: 'SERVED',
-      customerId: 'cust-2',
-      customerName: 'Nusrat Jahan',
-      customerPhone: '01819876543',
-      items: [
-        {
-          id: 'item-3',
-          productId: 'prod-5',
-          productName: 'The Royal Palette Signature Platter',
-          unitPrice: 2450,
-          quantity: 1,
-          totalPrice: 2450,
-        },
-        {
-          id: 'item-4',
-          productId: 'prod-10',
-          productName: 'Royal Blue Lagoon Mocktail',
-          unitPrice: 290,
-          quantity: 2,
-          totalPrice: 580,
-        },
-      ],
-      subtotal: 3030,
-      discountAmount: 0,
-      taxAmount: 0,
-      serviceChargeAmount: 0,
-      tipAmount: 0,
-      totalAmount: 3030,
-      pointsEarned: 66,
-      pointsRedeemed: 0,
-      pointsDiscountValue: 0,
-      paymentStatus: 'UNPAID',
-      createdAt: new Date(now - 3600000 * 1).toISOString(),
-    },
-    {
-      id: 'ord-103',
-      orderNumber: 'TRP-1003',
-      orderType: 'TAKEAWAY',
-      status: 'COMPLETED',
-      customerId: 'cust-3',
-      customerName: 'Tanvir Ahmed',
-      customerPhone: '01912345678',
-      items: [
-        {
-          id: 'item-5',
-          productId: 'prod-6',
-          productName: 'Zafrani Butter Chicken',
-          unitPrice: 580,
-          quantity: 2,
-          totalPrice: 1160,
-        },
-        {
-          id: 'item-6',
-          productId: 'prod-7',
-          productName: 'Truffle Garlic Butter Naan',
-          unitPrice: 180,
-          quantity: 4,
-          totalPrice: 720,
-        },
-      ],
-      subtotal: 1880,
-      discountAmount: 0,
-      taxAmount: 0,
-      serviceChargeAmount: 0,
-      tipAmount: 0,
-      totalAmount: 1880,
-      pointsEarned: 29,
-      pointsRedeemed: 0,
-      pointsDiscountValue: 0,
-      paymentStatus: 'PAID',
-      paymentMethod: 'CASH',
-      createdAt: new Date(now - 3600000 * 5).toISOString(),
-      completedAt: new Date(now - 3600000 * 4.5).toISOString(),
-    },
-  ];
+  return [];
 }
 
 const listeners = new Set<() => void>();
@@ -459,7 +335,7 @@ function loadFromStorage() {
     if (t) state.tables = JSON.parse(t);
     if (m) state.customers = JSON.parse(m);
     if (o) state.orders = JSON.parse(o);
-    else state.orders = getInitialSampleOrders();
+    else state.orders = [];
     if (s) state.settings = JSON.parse(s);
     if (d) state.drawerLogs = JSON.parse(d);
 
@@ -610,6 +486,31 @@ async function dbUpdateTable(tableId: string, status: TableStatus, currentOrderI
     }).eq('id', tableId);
   } catch (err) {
     console.error('DB Update Table Error:', err);
+  }
+}
+
+async function dbUpdateTableFull(tableId: string, updates: Partial<Table>) {
+  try {
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.tableNumber !== undefined) dbUpdates.table_number = updates.tableNumber;
+    if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
+    if (updates.section !== undefined) dbUpdates.section = updates.section;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.currentOrderId !== undefined) dbUpdates.current_order_id = updates.currentOrderId || null;
+
+    if (Object.keys(dbUpdates).length > 0) {
+      await insforge.database.from('dining_tables').update(dbUpdates).eq('id', tableId);
+    }
+  } catch (err) {
+    console.error('DB Full Update Table Error:', err);
+  }
+}
+
+async function dbDeleteTable(tableId: string) {
+  try {
+    await insforge.database.from('dining_tables').delete().eq('id', tableId);
+  } catch (err) {
+    console.error('DB Delete Table Error:', err);
   }
 }
 
@@ -920,6 +821,22 @@ export const restaurantStore = {
     return newTable;
   },
 
+  updateTable(id: string, updates: Partial<Table>) {
+    state.tables = state.tables.map((t) => (t.id === id ? { ...t, ...updates } : t));
+    saveToStorage();
+    notify();
+
+    dbUpdateTableFull(id, updates);
+  },
+
+  deleteTable(id: string) {
+    state.tables = state.tables.filter((t) => t.id !== id);
+    saveToStorage();
+    notify();
+
+    dbDeleteTable(id);
+  },
+
   // ---------------- CUSTOMER & LOYALTY CRUD ----------------
   addCustomer(customerData: Omit<Customer, 'id' | 'tier' | 'pointsBalance' | 'totalSpent' | 'visitCount' | 'joinedAt'>) {
     const newCustomer: Customer = {
@@ -1177,8 +1094,8 @@ export const restaurantStore = {
     state.products = INITIAL_PRODUCTS;
     state.categories = INITIAL_CATEGORIES;
     state.tables = INITIAL_TABLES;
-    state.customers = INITIAL_CUSTOMERS;
-    state.orders = getInitialSampleOrders();
+    state.customers = [];
+    state.orders = [];
     state.settings = INITIAL_SETTINGS;
     state.drawerLogs = [];
     saveToStorage();
