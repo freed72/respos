@@ -25,6 +25,34 @@ import {
 import { triggerCashDrawer } from './hardware/cashDrawer';
 import { insforge } from './insforge';
 
+export type OutboxActionType =
+  | 'INSERT_PRODUCT'
+  | 'UPDATE_PRODUCT'
+  | 'DELETE_PRODUCT'
+  | 'INSERT_CATEGORY'
+  | 'UPDATE_CATEGORY'
+  | 'DELETE_CATEGORY'
+  | 'INSERT_TABLE'
+  | 'UPDATE_TABLE'
+  | 'UPDATE_TABLE_FULL'
+  | 'DELETE_TABLE'
+  | 'INSERT_CUSTOMER'
+  | 'UPDATE_CUSTOMER'
+  | 'INSERT_ORDER'
+  | 'SETTLE_ORDER'
+  | 'UPDATE_ORDER_STATUS'
+  | 'INSERT_DRAWER_LOG'
+  | 'UPDATE_SETTINGS';
+
+export interface OutboxItem {
+  id: string;
+  type: OutboxActionType;
+  payload: any;
+  createdAt: string;
+  attempts: number;
+  lastError?: string;
+}
+
 const STORAGE_KEYS = {
   PRODUCTS: 'trp_products_v2',
   CATEGORIES: 'trp_categories_v2',
@@ -33,6 +61,7 @@ const STORAGE_KEYS = {
   ORDERS: 'trp_orders_v2',
   SETTINGS: 'trp_settings_v2',
   DRAWER_LOGS: 'trp_drawer_logs_v2',
+  OUTBOX: 'trp_outbox_queue_v2',
 };
 
 export interface DrawerLogEntry {
@@ -52,6 +81,10 @@ let state = {
   orders: [] as Order[],
   settings: INITIAL_SETTINGS,
   drawerLogs: [] as DrawerLogEntry[],
+  outboxQueue: [] as OutboxItem[],
+  isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+  isSyncingOutbox: false,
+  lastSyncTime: null as string | null,
   initialized: false,
 };
 
@@ -329,6 +362,7 @@ function loadFromStorage() {
     const o = localStorage.getItem(STORAGE_KEYS.ORDERS);
     const s = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     const d = localStorage.getItem(STORAGE_KEYS.DRAWER_LOGS);
+    const q = localStorage.getItem(STORAGE_KEYS.OUTBOX);
 
     if (p) state.products = JSON.parse(p);
     if (c) state.categories = JSON.parse(c);
@@ -338,7 +372,9 @@ function loadFromStorage() {
     else state.orders = [];
     if (s) state.settings = JSON.parse(s);
     if (d) state.drawerLogs = JSON.parse(d);
+    if (q) state.outboxQueue = JSON.parse(q);
 
+    state.isOnline = navigator.onLine;
     state.initialized = true;
   } catch (err) {
     console.error('Failed to load storage:', err);
@@ -355,277 +391,554 @@ function saveToStorage() {
     localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(state.orders));
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(state.settings));
     localStorage.setItem(STORAGE_KEYS.DRAWER_LOGS, JSON.stringify(state.drawerLogs));
+    localStorage.setItem(STORAGE_KEYS.OUTBOX, JSON.stringify(state.outboxQueue));
   } catch (err) {
     console.error('Failed to save storage:', err);
   }
 }
 
-// ---------------- ASYNC DATABASE HELPERS ----------------
+// ---------------- OFFLINE OUTBOX & AUTO-REPLAY QUEUE ENGINE ----------------
+
+function enqueueOutboxMutation(type: OutboxActionType, payload: any) {
+  const item: OutboxItem = {
+    id: `outbox-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    type,
+    payload,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  };
+
+  state.outboxQueue = [...state.outboxQueue, item];
+  saveToStorage();
+  notify();
+  console.log(`[Outbox Enqueued] ${type} (${item.id}) - Queue size: ${state.outboxQueue.length}`);
+}
+
+async function executeDirectMutation(type: OutboxActionType, payload: any): Promise<void> {
+  switch (type) {
+    case 'INSERT_PRODUCT': {
+      const product = payload as Product;
+      const { error } = await insforge.database.from('products').insert([
+        {
+          id: product.id,
+          name: product.name,
+          bangla_name: product.banglaName || null,
+          description: product.description,
+          category_id: product.categoryId,
+          price: product.price,
+          cost_price: product.costPrice,
+          image_url: product.imageUrl,
+          dietary_tags: JSON.stringify(product.dietaryTags || []),
+          is_available: product.isAvailable,
+          preparation_time_minutes: product.preparationTimeMinutes,
+          modifier_groups: JSON.stringify(product.modifierGroups || []),
+          sort_order: product.sortOrder,
+        },
+      ]);
+      if (error) throw new Error(error.message || 'Error inserting product');
+      break;
+    }
+    case 'UPDATE_PRODUCT': {
+      const { id, updates } = payload as { id: string; updates: Partial<Product> };
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.banglaName !== undefined) dbUpdates.bangla_name = updates.banglaName;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.categoryId !== undefined) dbUpdates.category_id = updates.categoryId;
+      if (updates.price !== undefined) dbUpdates.price = updates.price;
+      if (updates.costPrice !== undefined) dbUpdates.cost_price = updates.costPrice;
+      if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+      if (updates.dietaryTags !== undefined) dbUpdates.dietary_tags = JSON.stringify(updates.dietaryTags);
+      if (updates.isAvailable !== undefined) dbUpdates.is_available = updates.isAvailable;
+      if (updates.preparationTimeMinutes !== undefined) dbUpdates.preparation_time_minutes = updates.preparationTimeMinutes;
+      if (updates.modifierGroups !== undefined) dbUpdates.modifier_groups = JSON.stringify(updates.modifierGroups);
+      if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+
+      if (Object.keys(dbUpdates).length > 0) {
+        const { error } = await insforge.database.from('products').update(dbUpdates).eq('id', id);
+        if (error) throw new Error(error.message || 'Error updating product');
+      }
+      break;
+    }
+    case 'DELETE_PRODUCT': {
+      const { id } = payload as { id: string };
+      const { error } = await insforge.database.from('products').delete().eq('id', id);
+      if (error) throw new Error(error.message || 'Error deleting product');
+      break;
+    }
+    case 'INSERT_CATEGORY': {
+      const category = payload as Category;
+      const { error } = await insforge.database.from('categories').insert([
+        {
+          id: category.id,
+          name: category.name,
+          slug: category.slug,
+          description: category.description || null,
+          icon_name: category.iconName,
+          sort_order: category.sortOrder,
+          is_active: category.isActive,
+        },
+      ]);
+      if (error) throw new Error(error.message || 'Error inserting category');
+      break;
+    }
+    case 'UPDATE_CATEGORY': {
+      const { id, updates } = payload as { id: string; updates: Partial<Category> };
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.slug !== undefined) dbUpdates.slug = updates.slug;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.iconName !== undefined) dbUpdates.icon_name = updates.iconName;
+      if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
+      if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+      if (Object.keys(dbUpdates).length > 0) {
+        const { error } = await insforge.database.from('categories').update(dbUpdates).eq('id', id);
+        if (error) throw new Error(error.message || 'Error updating category');
+      }
+      break;
+    }
+    case 'DELETE_CATEGORY': {
+      const { id } = payload as { id: string };
+      const { error } = await insforge.database.from('categories').delete().eq('id', id);
+      if (error) throw new Error(error.message || 'Error deleting category');
+      break;
+    }
+    case 'INSERT_TABLE': {
+      const table = payload as Table;
+      const { error } = await insforge.database.from('dining_tables').insert([
+        {
+          id: table.id,
+          table_number: table.tableNumber,
+          capacity: table.capacity,
+          section: table.section,
+          status: table.status,
+          current_order_id: table.currentOrderId || null,
+        },
+      ]);
+      if (error) throw new Error(error.message || 'Error inserting table');
+      break;
+    }
+    case 'UPDATE_TABLE': {
+      const { tableId, status, currentOrderId } = payload as { tableId: string; status: TableStatus; currentOrderId?: string };
+      const { error } = await insforge.database.from('dining_tables').update({
+        status,
+        current_order_id: currentOrderId || null,
+      }).eq('id', tableId);
+      if (error) throw new Error(error.message || 'Error updating table status');
+      break;
+    }
+    case 'UPDATE_TABLE_FULL': {
+      const { tableId, updates } = payload as { tableId: string; updates: Partial<Table> };
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.tableNumber !== undefined) dbUpdates.table_number = updates.tableNumber;
+      if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
+      if (updates.section !== undefined) dbUpdates.section = updates.section;
+      if (updates.status !== undefined) dbUpdates.status = updates.status;
+      if (updates.currentOrderId !== undefined) dbUpdates.current_order_id = updates.currentOrderId || null;
+
+      if (Object.keys(dbUpdates).length > 0) {
+        const { error } = await insforge.database.from('dining_tables').update(dbUpdates).eq('id', tableId);
+        if (error) throw new Error(error.message || 'Error full updating table');
+      }
+      break;
+    }
+    case 'DELETE_TABLE': {
+      const { tableId } = payload as { tableId: string };
+      const { error } = await insforge.database.from('dining_tables').delete().eq('id', tableId);
+      if (error) throw new Error(error.message || 'Error deleting table');
+      break;
+    }
+    case 'INSERT_CUSTOMER': {
+      const customer = payload as Customer;
+      const { error } = await insforge.database.from('customers').insert([
+        {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email || null,
+          tier: customer.tier,
+          points_balance: customer.pointsBalance,
+          total_spent: customer.totalSpent,
+          visit_count: customer.visitCount,
+          birth_date: customer.birthDate && customer.birthDate.trim() !== '' ? customer.birthDate : null,
+          notes: customer.notes || null,
+          created_at: customer.joinedAt,
+        },
+      ]);
+      if (error) throw new Error(error.message || 'Error inserting customer');
+      break;
+    }
+    case 'UPDATE_CUSTOMER': {
+      const { customerId, customer } = payload as { customerId: string; customer: Customer };
+      const { error } = await insforge.database.from('customers').update({
+        points_balance: customer.pointsBalance,
+        total_spent: customer.totalSpent,
+        visit_count: customer.visitCount,
+        tier: customer.tier,
+      }).eq('id', customerId);
+      if (error) throw new Error(error.message || 'Error updating customer');
+      break;
+    }
+    case 'INSERT_ORDER': {
+      const order = payload as Order;
+      // Upsert/Insert order
+      const { error: orderError } = await insforge.database.from('orders').insert([toDbOrder(order)]);
+      if (orderError) throw new Error(orderError.message || 'Error inserting order');
+      if (order.items && order.items.length > 0) {
+        const dbItems = order.items.map((it) => toDbOrderItem(it, order.id));
+        const { error: itemsError } = await insforge.database.from('order_items').insert(dbItems);
+        if (itemsError) throw new Error(itemsError.message || 'Error inserting order items');
+      }
+      break;
+    }
+    case 'SETTLE_ORDER': {
+      const { orderId, paymentMethod, payments, completedAt } = payload as {
+        orderId: string;
+        paymentMethod: PaymentMethod;
+        payments: unknown;
+        completedAt: string;
+      };
+      const { error } = await insforge.database.from('orders').update({
+        payment_status: 'PAID',
+        payment_method: paymentMethod,
+        payments: JSON.stringify(payments),
+        status: 'COMPLETED',
+        completed_at: completedAt,
+      }).eq('id', orderId);
+      if (error) throw new Error(error.message || 'Error settling order');
+      break;
+    }
+    case 'UPDATE_ORDER_STATUS': {
+      const { orderId, status } = payload as { orderId: string; status: OrderStatus };
+      const { error } = await insforge.database.from('orders').update({ status }).eq('id', orderId);
+      if (error) throw new Error(error.message || 'Error updating order status');
+      break;
+    }
+    case 'INSERT_DRAWER_LOG': {
+      const log = payload as DrawerLogEntry;
+      const { error } = await insforge.database.from('drawer_logs').insert([
+        {
+          id: log.id,
+          reason: log.reason,
+          order_number: log.orderNumber || null,
+          amount: log.amount || null,
+          timestamp: log.timestamp,
+        },
+      ]);
+      if (error) throw new Error(error.message || 'Error inserting drawer log');
+      break;
+    }
+    case 'UPDATE_SETTINGS': {
+      const settings = payload as Partial<SystemSettings>;
+      const dbSettings: Record<string, unknown> = {};
+      if (settings.restaurantName !== undefined) dbSettings.restaurant_name = settings.restaurantName;
+      if (settings.tagline !== undefined) dbSettings.tagline = settings.tagline;
+      if (settings.currency !== undefined) dbSettings.currency = settings.currency;
+      if (settings.currencyCode !== undefined) dbSettings.currency_code = settings.currencyCode;
+      if (settings.address !== undefined) dbSettings.address = settings.address;
+      if (settings.phone !== undefined) dbSettings.phone = settings.phone;
+      if (settings.email !== undefined) dbSettings.email = settings.email;
+      if (settings.binNumber !== undefined) dbSettings.bin_number = settings.binNumber;
+      if (settings.vatPercent !== undefined) dbSettings.vat_percent = settings.vatPercent;
+      if (settings.serviceChargePercent !== undefined) dbSettings.service_charge_percent = settings.serviceChargePercent;
+      if (settings.autoKickDrawerOnCash !== undefined) dbSettings.auto_kick_drawer_on_cash = settings.autoKickDrawerOnCash;
+      if (settings.drawerKickCodeHex !== undefined) dbSettings.drawer_kick_code_hex = settings.drawerKickCodeHex;
+      if (settings.receiptFooterMessage !== undefined) dbSettings.receipt_footer_message = settings.receiptFooterMessage;
+
+      if (Object.keys(dbSettings).length > 0) {
+        const { error } = await insforge.database.from('system_settings').update(dbSettings).eq('id', 'GLOBAL_CONFIG');
+        if (error) throw new Error(error.message || 'Error updating settings');
+      }
+      break;
+    }
+  }
+}
+
+// Replays all items in state.outboxQueue in strict FIFO order
+async function flushOutboxQueue(): Promise<{ processed: number; failed: number }> {
+  if (typeof window === 'undefined') return { processed: 0, failed: 0 };
+  if (!navigator.onLine) {
+    state.isOnline = false;
+    notify();
+    return { processed: 0, failed: 0 };
+  }
+  if (state.isSyncingOutbox) return { processed: 0, failed: 0 };
+  if (state.outboxQueue.length === 0) return { processed: 0, failed: 0 };
+
+  state.isSyncingOutbox = true;
+  notify();
+
+  let processedCount = 0;
+  let failedCount = 0;
+
+  console.log(`[Auto-Replay Engine] Starting queue replay of ${state.outboxQueue.length} pending mutations...`);
+
+  const remainingQueue: OutboxItem[] = [];
+
+  for (let i = 0; i < state.outboxQueue.length; i++) {
+    const item = state.outboxQueue[i];
+    try {
+      await executeDirectMutation(item.type, item.payload);
+      processedCount++;
+      console.log(`[Auto-Replay Engine] Replayed mutation (${item.type} - ${item.id}) successfully.`);
+    } catch (err: any) {
+      console.error(`[Auto-Replay Engine] Replay failed for ${item.type} (${item.id}):`, err);
+      item.attempts += 1;
+      item.lastError = err?.message || String(err);
+      failedCount++;
+      // Keep remaining items if network is interrupted
+      remainingQueue.push(item);
+
+      // If connection was lost during loop, keep the rest for next cycle
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        state.isOnline = false;
+        remainingQueue.push(...state.outboxQueue.slice(i + 1));
+        break;
+      }
+    }
+  }
+
+  state.outboxQueue = remainingQueue;
+  state.isSyncingOutbox = false;
+  state.lastSyncTime = new Date().toISOString();
+  saveToStorage();
+  notify();
+
+  console.log(`[Auto-Replay Engine] Completed sync pass: ${processedCount} processed, ${failedCount} remaining.`);
+  return { processed: processedCount, failed: failedCount };
+}
+
+// ---------------- ASYNC DATABASE HELPERS (WITH AUTOMATIC OUTBOX FALLBACK) ----------------
 async function dbInsertProduct(product: Product) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('INSERT_PRODUCT', product);
+    return;
+  }
   try {
-    await insforge.database.from('products').insert([
-      {
-        id: product.id,
-        name: product.name,
-        bangla_name: product.banglaName || null,
-        description: product.description,
-        category_id: product.categoryId,
-        price: product.price,
-        cost_price: product.costPrice,
-        image_url: product.imageUrl,
-        dietary_tags: JSON.stringify(product.dietaryTags || []),
-        is_available: product.isAvailable,
-        preparation_time_minutes: product.preparationTimeMinutes,
-        modifier_groups: JSON.stringify(product.modifierGroups || []),
-        sort_order: product.sortOrder,
-      },
-    ]);
+    await executeDirectMutation('INSERT_PRODUCT', product);
   } catch (err) {
-    console.error('DB Insert Product Error:', err);
+    console.warn('DB Insert Product failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('INSERT_PRODUCT', product);
   }
 }
 
 async function dbUpdateProduct(id: string, updates: Partial<Product>) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_PRODUCT', { id, updates });
+    return;
+  }
   try {
-    const dbUpdates: Record<string, unknown> = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.banglaName !== undefined) dbUpdates.bangla_name = updates.banglaName;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if (updates.categoryId !== undefined) dbUpdates.category_id = updates.categoryId;
-    if (updates.price !== undefined) dbUpdates.price = updates.price;
-    if (updates.costPrice !== undefined) dbUpdates.cost_price = updates.costPrice;
-    if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
-    if (updates.dietaryTags !== undefined) dbUpdates.dietary_tags = JSON.stringify(updates.dietaryTags);
-    if (updates.isAvailable !== undefined) dbUpdates.is_available = updates.isAvailable;
-    if (updates.preparationTimeMinutes !== undefined) dbUpdates.preparation_time_minutes = updates.preparationTimeMinutes;
-    if (updates.modifierGroups !== undefined) dbUpdates.modifier_groups = JSON.stringify(updates.modifierGroups);
-    if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
-
-    if (Object.keys(dbUpdates).length > 0) {
-      await insforge.database.from('products').update(dbUpdates).eq('id', id);
-    }
+    await executeDirectMutation('UPDATE_PRODUCT', { id, updates });
   } catch (err) {
-    console.error('DB Update Product Error:', err);
+    console.warn('DB Update Product failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_PRODUCT', { id, updates });
   }
 }
 
 async function dbDeleteProduct(id: string) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('DELETE_PRODUCT', { id });
+    return;
+  }
   try {
-    await insforge.database.from('products').delete().eq('id', id);
+    await executeDirectMutation('DELETE_PRODUCT', { id });
   } catch (err) {
-    console.error('DB Delete Product Error:', err);
+    console.warn('DB Delete Product failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('DELETE_PRODUCT', { id });
   }
 }
 
 async function dbInsertCategory(category: Category) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('INSERT_CATEGORY', category);
+    return;
+  }
   try {
-    await insforge.database.from('categories').insert([
-      {
-        id: category.id,
-        name: category.name,
-        slug: category.slug,
-        description: category.description || null,
-        icon_name: category.iconName,
-        sort_order: category.sortOrder,
-        is_active: category.isActive,
-      },
-    ]);
+    await executeDirectMutation('INSERT_CATEGORY', category);
   } catch (err) {
-    console.error('DB Insert Category Error:', err);
+    console.warn('DB Insert Category failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('INSERT_CATEGORY', category);
   }
 }
 
 async function dbUpdateCategory(id: string, updates: Partial<Category>) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_CATEGORY', { id, updates });
+    return;
+  }
   try {
-    const dbUpdates: Record<string, unknown> = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.slug !== undefined) dbUpdates.slug = updates.slug;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if (updates.iconName !== undefined) dbUpdates.icon_name = updates.iconName;
-    if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
-    if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
-
-    if (Object.keys(dbUpdates).length > 0) {
-      await insforge.database.from('categories').update(dbUpdates).eq('id', id);
-    }
+    await executeDirectMutation('UPDATE_CATEGORY', { id, updates });
   } catch (err) {
-    console.error('DB Update Category Error:', err);
+    console.warn('DB Update Category failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_CATEGORY', { id, updates });
   }
 }
 
 async function dbDeleteCategory(id: string) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('DELETE_CATEGORY', { id });
+    return;
+  }
   try {
-    await insforge.database.from('categories').delete().eq('id', id);
+    await executeDirectMutation('DELETE_CATEGORY', { id });
   } catch (err) {
-    console.error('DB Delete Category Error:', err);
+    console.warn('DB Delete Category failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('DELETE_CATEGORY', { id });
   }
 }
 
 async function dbInsertTable(table: Table) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('INSERT_TABLE', table);
+    return;
+  }
   try {
-    await insforge.database.from('dining_tables').insert([
-      {
-        id: table.id,
-        table_number: table.tableNumber,
-        capacity: table.capacity,
-        section: table.section,
-        status: table.status,
-        current_order_id: table.currentOrderId || null,
-      },
-    ]);
+    await executeDirectMutation('INSERT_TABLE', table);
   } catch (err) {
-    console.error('DB Insert Table Error:', err);
+    console.warn('DB Insert Table failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('INSERT_TABLE', table);
   }
 }
 
 async function dbUpdateTable(tableId: string, status: TableStatus, currentOrderId?: string) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_TABLE', { tableId, status, currentOrderId });
+    return;
+  }
   try {
-    await insforge.database.from('dining_tables').update({
-      status,
-      current_order_id: currentOrderId || null,
-    }).eq('id', tableId);
+    await executeDirectMutation('UPDATE_TABLE', { tableId, status, currentOrderId });
   } catch (err) {
-    console.error('DB Update Table Error:', err);
+    console.warn('DB Update Table failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_TABLE', { tableId, status, currentOrderId });
   }
 }
 
 async function dbUpdateTableFull(tableId: string, updates: Partial<Table>) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_TABLE_FULL', { tableId, updates });
+    return;
+  }
   try {
-    const dbUpdates: Record<string, unknown> = {};
-    if (updates.tableNumber !== undefined) dbUpdates.table_number = updates.tableNumber;
-    if (updates.capacity !== undefined) dbUpdates.capacity = updates.capacity;
-    if (updates.section !== undefined) dbUpdates.section = updates.section;
-    if (updates.status !== undefined) dbUpdates.status = updates.status;
-    if (updates.currentOrderId !== undefined) dbUpdates.current_order_id = updates.currentOrderId || null;
-
-    if (Object.keys(dbUpdates).length > 0) {
-      await insforge.database.from('dining_tables').update(dbUpdates).eq('id', tableId);
-    }
+    await executeDirectMutation('UPDATE_TABLE_FULL', { tableId, updates });
   } catch (err) {
-    console.error('DB Full Update Table Error:', err);
+    console.warn('DB Full Update Table failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_TABLE_FULL', { tableId, updates });
   }
 }
 
 async function dbDeleteTable(tableId: string) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('DELETE_TABLE', { tableId });
+    return;
+  }
   try {
-    await insforge.database.from('dining_tables').delete().eq('id', tableId);
+    await executeDirectMutation('DELETE_TABLE', { tableId });
   } catch (err) {
-    console.error('DB Delete Table Error:', err);
+    console.warn('DB Delete Table failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('DELETE_TABLE', { tableId });
   }
 }
 
 async function dbInsertCustomer(customer: Customer) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('INSERT_CUSTOMER', customer);
+    return;
+  }
   try {
-    await insforge.database.from('customers').insert([
-      {
-        id: customer.id,
-        name: customer.name,
-        phone: customer.phone,
-        email: customer.email || null,
-        tier: customer.tier,
-        points_balance: customer.pointsBalance,
-        total_spent: customer.totalSpent,
-        visit_count: customer.visitCount,
-        birth_date: customer.birthDate && customer.birthDate.trim() !== '' ? customer.birthDate : null,
-        notes: customer.notes || null,
-        created_at: customer.joinedAt,
-      },
-    ]);
+    await executeDirectMutation('INSERT_CUSTOMER', customer);
   } catch (err) {
-    console.error('DB Insert Customer Error:', err);
+    console.warn('DB Insert Customer failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('INSERT_CUSTOMER', customer);
   }
 }
 
 async function dbUpdateCustomer(customerId: string, customer: Customer) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_CUSTOMER', { customerId, customer });
+    return;
+  }
   try {
-    await insforge.database.from('customers').update({
-      points_balance: customer.pointsBalance,
-      total_spent: customer.totalSpent,
-      visit_count: customer.visitCount,
-      tier: customer.tier,
-    }).eq('id', customerId);
+    await executeDirectMutation('UPDATE_CUSTOMER', { customerId, customer });
   } catch (err) {
-    console.error('DB Update Customer Points Error:', err);
+    console.warn('DB Update Customer failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_CUSTOMER', { customerId, customer });
   }
 }
 
 async function dbInsertOrder(order: Order) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('INSERT_ORDER', order);
+    return;
+  }
   try {
-    await insforge.database.from('orders').insert([toDbOrder(order)]);
-    if (order.items && order.items.length > 0) {
-      const dbItems = order.items.map((it) => toDbOrderItem(it, order.id));
-      await insforge.database.from('order_items').insert(dbItems);
-    }
+    await executeDirectMutation('INSERT_ORDER', order);
   } catch (err) {
-    console.error('DB Insert Order Error:', err);
+    console.warn('DB Insert Order failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('INSERT_ORDER', order);
   }
 }
 
 async function dbSettleOrder(orderId: string, paymentMethod: PaymentMethod, payments: unknown, completedAt: string) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('SETTLE_ORDER', { orderId, paymentMethod, payments, completedAt });
+    return;
+  }
   try {
-    await insforge.database.from('orders').update({
-      payment_status: 'PAID',
-      payment_method: paymentMethod,
-      payments: JSON.stringify(payments),
-      status: 'COMPLETED',
-      completed_at: completedAt,
-    }).eq('id', orderId);
+    await executeDirectMutation('SETTLE_ORDER', { orderId, paymentMethod, payments, completedAt });
   } catch (err) {
-    console.error('DB Settle Order Error:', err);
+    console.warn('DB Settle Order failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('SETTLE_ORDER', { orderId, paymentMethod, payments, completedAt });
   }
 }
 
 async function dbUpdateOrderStatus(orderId: string, status: OrderStatus) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_ORDER_STATUS', { orderId, status });
+    return;
+  }
   try {
-    await insforge.database.from('orders').update({ status }).eq('id', orderId);
+    await executeDirectMutation('UPDATE_ORDER_STATUS', { orderId, status });
   } catch (err) {
-    console.error('DB Update Order Status Error:', err);
+    console.warn('DB Update Order Status failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_ORDER_STATUS', { orderId, status });
   }
 }
 
 async function dbInsertDrawerLog(log: DrawerLogEntry) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('INSERT_DRAWER_LOG', log);
+    return;
+  }
   try {
-    await insforge.database.from('drawer_logs').insert([
-      {
-        id: log.id,
-        reason: log.reason,
-        order_number: log.orderNumber || null,
-        amount: log.amount || null,
-        timestamp: log.timestamp,
-      },
-    ]);
+    await executeDirectMutation('INSERT_DRAWER_LOG', log);
   } catch (err) {
-    console.error('DB Insert Drawer Log Error:', err);
+    console.warn('DB Insert Drawer Log failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('INSERT_DRAWER_LOG', log);
   }
 }
 
 async function dbUpdateSettings(settings: Partial<SystemSettings>) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_SETTINGS', settings);
+    return;
+  }
   try {
-    const dbSettings: Record<string, unknown> = {};
-    if (settings.restaurantName !== undefined) dbSettings.restaurant_name = settings.restaurantName;
-    if (settings.tagline !== undefined) dbSettings.tagline = settings.tagline;
-    if (settings.currency !== undefined) dbSettings.currency = settings.currency;
-    if (settings.currencyCode !== undefined) dbSettings.currency_code = settings.currencyCode;
-    if (settings.address !== undefined) dbSettings.address = settings.address;
-    if (settings.phone !== undefined) dbSettings.phone = settings.phone;
-    if (settings.email !== undefined) dbSettings.email = settings.email;
-    if (settings.binNumber !== undefined) dbSettings.bin_number = settings.binNumber;
-    if (settings.vatPercent !== undefined) dbSettings.vat_percent = settings.vatPercent;
-    if (settings.serviceChargePercent !== undefined) dbSettings.service_charge_percent = settings.serviceChargePercent;
-    if (settings.autoKickDrawerOnCash !== undefined) dbSettings.auto_kick_drawer_on_cash = settings.autoKickDrawerOnCash;
-    if (settings.drawerKickCodeHex !== undefined) dbSettings.drawer_kick_code_hex = settings.drawerKickCodeHex;
-    if (settings.receiptFooterMessage !== undefined) dbSettings.receipt_footer_message = settings.receiptFooterMessage;
-
-    if (Object.keys(dbSettings).length > 0) {
-      await insforge.database.from('system_settings').update(dbSettings).eq('id', 'GLOBAL_CONFIG');
-    }
+    await executeDirectMutation('UPDATE_SETTINGS', settings);
   } catch (err) {
-    console.error('DB Update Settings Error:', err);
+    console.warn('DB Update Settings failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_SETTINGS', settings);
   }
 }
 
 // ---------------- INSFORGE DATABASE LIVE SYNC ----------------
 async function syncFromDatabase() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    state.isOnline = false;
+    notify();
+    return;
+  }
+
   try {
     const [
       { data: categoriesData },
@@ -644,6 +957,9 @@ async function syncFromDatabase() {
       insforge.database.from('order_items').select(),
       insforge.database.from('drawer_logs').select().order('timestamp', { ascending: false }).limit(50),
     ]);
+
+    state.isOnline = true;
+    state.lastSyncTime = new Date().toISOString();
 
     if (categoriesData && categoriesData.length > 0) {
       state.categories = (categoriesData as DbCategory[]).map((c) => ({
@@ -698,7 +1014,11 @@ async function syncFromDatabase() {
     saveToStorage();
     notify();
   } catch (err) {
-    console.warn('InsForge database sync warning (using cached data):', err);
+    console.warn('InsForge database sync warning (using cached local data):', err);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      state.isOnline = false;
+      notify();
+    }
   }
 }
 
@@ -715,6 +1035,8 @@ export function calculatePointsEarned(amount: number, tier: LoyaltyTier, setting
   return Math.floor((amount / 100) * rate);
 }
 
+let networkListenersAttached = false;
+
 export const restaurantStore = {
   getSnapshot() {
     return state;
@@ -725,6 +1047,42 @@ export const restaurantStore = {
       loadFromStorage();
       syncFromDatabase();
     }
+
+    if (typeof window !== 'undefined' && !networkListenersAttached) {
+      networkListenersAttached = true;
+
+      const handleOnline = () => {
+        console.log('[Network Monitor] Connection restored. Replaying outbox mutations and syncing...');
+        state.isOnline = true;
+        notify();
+        restaurantStore.flushOutbox();
+        restaurantStore.syncFromDatabase();
+      };
+
+      const handleOffline = () => {
+        console.warn('[Network Monitor] Connection lost. Operating in Zero-Latency Offline Outbox Mode.');
+        state.isOnline = false;
+        notify();
+      };
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      // Heartbeat periodic outbox queue retry (every 15 seconds)
+      setInterval(() => {
+        if (typeof navigator !== 'undefined' && navigator.onLine && state.outboxQueue.length > 0 && !state.isSyncingOutbox) {
+          restaurantStore.flushOutbox();
+        }
+      }, 15000);
+    }
+  },
+
+  async flushOutbox() {
+    return await flushOutboxQueue();
+  },
+
+  async syncFromDatabase() {
+    return await syncFromDatabase();
   },
 
   // ---------------- PRODUCT CRUD ----------------

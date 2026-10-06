@@ -62,6 +62,7 @@ import { formatBDT, formatDateTime, getTierBadgeClass } from '@/lib/formatters';
 import { ThermalReceiptModal } from '@/components/pos/ThermalReceiptModal';
 import { ZReportModal } from '@/components/admin/ZReportModal';
 import { AdminLoginGate } from '@/components/admin/AdminLoginGate';
+import { SyncStatusBadge } from '@/components/layout/SyncStatusBadge';
 
 const DIETARY_OPTIONS: { tag: DietaryTag; label: string }[] = [
   { tag: 'CHEF_SPECIAL', label: "Chef's Special" },
@@ -543,6 +544,8 @@ export default function AdminDashboardPage() {
 
           {/* Right Header Actions */}
           <div className="flex items-center gap-2.5">
+            <SyncStatusBadge variant="admin" />
+
             {currentTime && (
               <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300">
                 <Clock className="w-3.5 h-3.5 text-amber-400" />

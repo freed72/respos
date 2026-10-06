@@ -30,6 +30,7 @@ import { useRestaurantStore } from '@/lib/store';
 import { Order, OrderItem, PaymentMethod, Product, Table } from '@/types';
 import { formatBDT } from '@/lib/formatters';
 import { ThermalReceiptModal } from '@/components/pos/ThermalReceiptModal';
+import { SyncStatusBadge } from '@/components/layout/SyncStatusBadge';
 
 export default function POSPage() {
   const {
@@ -411,6 +412,9 @@ export default function POSPage() {
                   )}
                 </div>
               </div>
+
+              {/* Network & Offline Outbox Status Badge */}
+              <SyncStatusBadge variant={isDarkMode ? 'pos-dark' : 'pos-light'} />
 
               {/* Theme Mode Toggle Button (20% Larger) */}
               <button
