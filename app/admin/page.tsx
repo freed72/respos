@@ -57,12 +57,14 @@ import {
   LoyaltyTier,
   Order,
   Product,
+  StaffMember,
 } from '@/types';
 import { formatBDT, formatDateTime, getTierBadgeClass } from '@/lib/formatters';
 import { ThermalReceiptModal } from '@/components/pos/ThermalReceiptModal';
 import { ZReportModal } from '@/components/admin/ZReportModal';
 import { AdminLoginGate } from '@/components/admin/AdminLoginGate';
 import { SyncStatusBadge } from '@/components/layout/SyncStatusBadge';
+import { getStaffMembers, saveStaffMembers } from '@/lib/pos-auth';
 
 const DIETARY_OPTIONS: { tag: DietaryTag; label: string }[] = [
   { tag: 'CHEF_SPECIAL', label: "Chef's Special" },
@@ -189,6 +191,63 @@ export default function AdminDashboardPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
+
+  // Staff & POS PIN Management State
+  const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffPin, setNewStaffPin] = useState('');
+  const [newStaffRole, setNewStaffRole] = useState<'CASHIER' | 'MANAGER' | 'SERVER'>('CASHIER');
+  const [staffSuccessMsg, setStaffSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStaffList(getStaffMembers());
+  }, []);
+
+  const handleUpdateStaffPin = (id: string, newPin: string) => {
+    if (!/^\d{4}$/.test(newPin)) {
+      alert('PIN must be exactly 4 numeric digits.');
+      return;
+    }
+    const updated = staffList.map((s) => (s.id === id ? { ...s, pin: newPin } : s));
+    setStaffList(updated);
+    saveStaffMembers(updated);
+    setStaffSuccessMsg('Passcode updated successfully!');
+    setTimeout(() => setStaffSuccessMsg(null), 3000);
+  };
+
+  const handleAddStaff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffName.trim()) return;
+    if (!/^\d{4}$/.test(newStaffPin)) {
+      alert('Passcode must be exactly 4 numeric digits.');
+      return;
+    }
+    const newMember: StaffMember = {
+      id: `staff-${Date.now()}`,
+      name: newStaffName.trim(),
+      role: newStaffRole,
+      pin: newStaffPin,
+    };
+    const updated = [...staffList, newMember];
+    setStaffList(updated);
+    saveStaffMembers(updated);
+    setNewStaffName('');
+    setNewStaffPin('');
+    setStaffSuccessMsg(`Staff member "${newMember.name}" added!`);
+    setTimeout(() => setStaffSuccessMsg(null), 3000);
+  };
+
+  const handleDeleteStaff = (id: string) => {
+    if (staffList.length <= 1) {
+      alert('At least one staff member must remain to access the POS.');
+      return;
+    }
+    if (confirm('Are you sure you want to remove this staff member?')) {
+      const updated = staffList.filter((s) => s.id !== id);
+      setStaffList(updated);
+      saveStaffMembers(updated);
+    }
+  };
 
   // Analytics Calculations
   const completedOrders = orders.filter((o) => o.status === 'COMPLETED');
@@ -1310,6 +1369,103 @@ export default function AdminDashboardPage() {
                       className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-amber-500"
                     />
                   </div>
+                </div>
+
+                {/* Staff & Cashier PIN Management */}
+                <div className="pt-4 border-t border-slate-800 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                        <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                        <span>POS Cashier & Staff Passcodes (Offline PIN Security)</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Manage 4-digit PINs used to lock and unlock the POS terminal.
+                      </p>
+                    </div>
+                    {staffSuccessMsg && (
+                      <span className="text-[11px] font-bold text-emerald-400 font-mono animate-fade-in">
+                        ✓ {staffSuccessMsg}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Existing Staff List */}
+                  <div className="bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden divide-y divide-slate-800/80">
+                    {staffList.map((staff) => (
+                      <div key={staff.id} className="p-3 flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-slate-800 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
+                            {staff.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-white block truncate">{staff.name}</span>
+                            <span className="text-[10px] text-slate-400 font-mono uppercase">{staff.role}</span>
+                          </div>
+                        </div>
+
+                        {/* PIN Editor */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="text-[10px] font-mono text-slate-400">PIN:</label>
+                          <input
+                            type="text"
+                            maxLength={4}
+                            defaultValue={staff.pin}
+                            onBlur={(e) => {
+                              if (e.target.value !== staff.pin) {
+                                handleUpdateStaffPin(staff.id, e.target.value);
+                              }
+                            }}
+                            className="w-16 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStaff(staff.id)}
+                            title="Remove staff member"
+                            className="p-1 text-slate-500 hover:text-rose-400 rounded transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add New Staff Member Form */}
+                  <form onSubmit={handleAddStaff} className="bg-slate-900/40 p-3 rounded-xl border border-slate-800/80 flex flex-wrap sm:flex-nowrap items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Staff name (e.g. Rashedul)"
+                      value={newStaffName}
+                      onChange={(e) => setNewStaffName(e.target.value)}
+                      className="flex-1 min-w-[140px] bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-white focus:outline-none focus:border-amber-500 text-xs"
+                    />
+                    <select
+                      value={newStaffRole}
+                      onChange={(e) => setNewStaffRole(e.target.value as StaffMember['role'])}
+                      className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-white focus:outline-none focus:border-amber-500 text-xs"
+                    >
+                      <option value="CASHIER">CASHIER</option>
+                      <option value="MANAGER">MANAGER</option>
+                      <option value="SERVER">SERVER</option>
+                    </select>
+                    <input
+                      type="text"
+                      required
+                      maxLength={4}
+                      placeholder="4-digit PIN"
+                      value={newStaffPin}
+                      onChange={(e) => setNewStaffPin(e.target.value.replace(/\D/g, ''))}
+                      className="w-24 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-center font-mono font-bold text-amber-400 focus:outline-none focus:border-amber-500 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition shrink-0"
+                    >
+                      + Add Staff
+                    </button>
+                  </form>
                 </div>
 
                 <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
