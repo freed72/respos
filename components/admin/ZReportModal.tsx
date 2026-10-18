@@ -212,25 +212,25 @@ Status: NBR Mushak-6.3 Certified Closeout`;
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#010617]/90 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 overflow-y-auto z-report-modal-backdrop">
-      <div className="bg-[#03091e] border border-amber-500/30 rounded-3xl max-w-6xl w-full shadow-[0_0_60px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col h-[94vh] max-h-[940px] text-slate-100 my-auto animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto z-report-modal-backdrop font-sans">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-6xl w-full shadow-2xl overflow-hidden flex flex-col h-[94vh] max-h-[940px] text-zinc-100 my-auto animate-in fade-in zoom-in-95 duration-200">
         
         {/* 1. Modal Header Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-b border-amber-500/20 bg-gradient-to-r from-[#000f50] via-[#05164d] to-[#010617] shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3.5 border-b border-zinc-800 bg-zinc-950 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-xs">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-serif font-black text-base sm:text-lg text-white tracking-wide">
+                <h2 className="font-sans font-bold text-base sm:text-lg text-white tracking-tight">
                   Daily Z-Report & Fiscal Closeout
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold font-mono tracking-wider">
                   NBR MUSHAK-6.3
                 </span>
               </div>
-              <p className="text-xs text-amber-200/80 font-mono">
+              <p className="text-xs text-zinc-400 font-mono">
                 Official Fiscal End-of-Day Register • Ref: <span className="font-bold text-amber-300">{zReportCode}</span>
               </p>
             </div>
@@ -239,16 +239,16 @@ Status: NBR Mushak-6.3 Certified Closeout`;
           <div className="flex items-center gap-2.5">
             <button
               onClick={handleCopySummary}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition"
+              className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold flex items-center gap-1.5 border border-zinc-700 transition"
               title="Copy shift summary text for messaging"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-zinc-400" />}
               <span>{copied ? 'Copied!' : 'Copy Summary'}</span>
             </button>
 
             <button
               onClick={handlePrint}
-              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 shadow-[0_0_25px_rgba(212,175,55,0.35)] transition active:scale-95"
+              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-zinc-950 font-bold text-xs flex items-center gap-2 shadow-sm transition active:scale-95"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Print Official Z-Report</span>
@@ -256,7 +256,7 @@ Status: NBR Mushak-6.3 Certified Closeout`;
 
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-xl bg-slate-800/70 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-700/60"
+              className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition border border-zinc-700"
               title="Close modal"
             >
               <X className="w-4 h-4" />
@@ -265,16 +265,16 @@ Status: NBR Mushak-6.3 Certified Closeout`;
         </div>
 
         {/* 2. Executive Key Metric Strip (Top Ribbon) */}
-        <div className="px-6 py-2.5 bg-slate-950/80 border-b border-white/10 grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
-          <div className="bg-slate-900/60 border border-emerald-500/20 rounded-xl px-3.5 py-2 flex items-center justify-between">
+        <div className="px-6 py-2.5 bg-zinc-950 border-b border-zinc-800 grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-bold block">Net Settlements</span>
               <span className="text-base font-black font-mono text-emerald-400">{formatBDT(netRevenue)}</span>
             </div>
-            <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{completedOrders.length} bills</span>
+            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded">{completedOrders.length} bills</span>
           </div>
 
-          <div className="bg-slate-900/60 border border-amber-500/20 rounded-xl px-3.5 py-2 flex items-center justify-between">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold block">NBR VAT ({settings.vatPercent}%)</span>
               <span className="text-base font-black font-mono text-amber-300">{formatBDT(totalVAT)}</span>
@@ -282,7 +282,7 @@ Status: NBR Mushak-6.3 Certified Closeout`;
             <span className="text-[10px] font-mono text-amber-300/70">Govt. Tax</span>
           </div>
 
-          <div className="bg-slate-900/60 border border-blue-500/20 rounded-xl px-3.5 py-2 flex items-center justify-between">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold block">Cash in Drawer</span>
               <span className="text-base font-black font-mono text-white">{formatBDT(paymentsByMethod.CASH || 0)}</span>
@@ -290,7 +290,7 @@ Status: NBR Mushak-6.3 Certified Closeout`;
             <span className="text-[10px] font-mono text-blue-300/70">{drawerLogsCount} kicks</span>
           </div>
 
-          <div className="bg-slate-900/60 border border-pink-500/20 rounded-xl px-3.5 py-2 flex items-center justify-between">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-mono uppercase tracking-wider text-pink-400 font-bold block">Digital MFS / Cards</span>
               <span className="text-base font-black font-mono text-white">
@@ -305,11 +305,11 @@ Status: NBR Mushak-6.3 Certified Closeout`;
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
           
           {/* LEFT: Printable Slip Preview Stage (Dominant, scrollable) */}
-          <div className="flex-1 min-w-0 bg-[#020512] p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
+          <div className="flex-1 min-w-0 bg-zinc-950 p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
             
             {/* Paper Layout Mode Toggle */}
-            <div className="w-full max-w-[420px] flex items-center justify-between mb-4 bg-slate-900/90 p-1.5 rounded-2xl border border-white/10 text-xs font-mono">
-              <span className="text-slate-400 text-[11px] flex items-center gap-1.5 pl-2.5">
+            <div className="w-full max-w-[420px] flex items-center justify-between mb-4 bg-zinc-900 p-1.5 rounded-2xl border border-zinc-800 text-xs font-mono">
+              <span className="text-zinc-400 text-[11px] flex items-center gap-1.5 pl-2.5">
                 <Receipt className="w-3.5 h-3.5 text-amber-400" />
                 <span>Paper Layout:</span>
               </span>
@@ -319,8 +319,8 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                   onClick={() => setPrintFormat('THERMAL_80MM')}
                   className={`px-3 py-1 rounded-xl transition flex items-center gap-1.5 font-bold text-xs ${
                     printFormat === 'THERMAL_80MM'
-                      ? 'bg-amber-500 text-slate-950 shadow-md'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-100'
                   }`}
                 >
                   <Receipt className="w-3.5 h-3.5" />
@@ -330,8 +330,8 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                   onClick={() => setPrintFormat('A4_SHEET')}
                   className={`px-3 py-1 rounded-xl transition flex items-center gap-1.5 font-bold text-xs ${
                     printFormat === 'A4_SHEET'
-                      ? 'bg-amber-500 text-slate-950 shadow-md'
-                      : 'text-slate-400 hover:text-white'
+                      ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                      : 'text-zinc-400 hover:text-zinc-100'
                   }`}
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -354,7 +354,7 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                 <div className="flex items-center justify-center gap-1 text-[9px] font-bold tracking-widest text-neutral-600 uppercase mb-0.5">
                   <Sparkles className="w-2.5 h-2.5 text-amber-600 inline" /> THE ROYAL PALETTE <Sparkles className="w-2.5 h-2.5 text-amber-600 inline" />
                 </div>
-                <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-black font-serif">
+                <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-black font-sans">
                   {settings.restaurantName}
                 </h1>
                 <p className="text-[10px] text-neutral-600 italic">{settings.tagline}</p>
@@ -579,7 +579,7 @@ Status: NBR Mushak-6.3 Certified Closeout`;
           </div>
 
           {/* RIGHT: Controls & Tender Analytics Panel (Fixed 380px width) */}
-          <div className="w-full lg:w-[380px] lg:shrink-0 bg-slate-900/80 p-5 space-y-5 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-white/10 overflow-y-auto">
+          <div className="w-full lg:w-[380px] lg:shrink-0 bg-zinc-900 p-5 space-y-5 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-zinc-800 overflow-y-auto">
             <div className="space-y-5">
               
               {/* Date Scope Filter */}
@@ -594,8 +594,8 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                     onClick={() => setDateFilter('TODAY')}
                     className={`py-2 px-2 rounded-xl font-mono text-xs font-bold transition flex items-center justify-center gap-1 ${
                       dateFilter === 'TODAY'
-                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                        ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                     }`}
                   >
                     <span>Today</span>
@@ -604,8 +604,8 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                     onClick={() => setDateFilter('YESTERDAY')}
                     className={`py-2 px-2 rounded-xl font-mono text-xs font-bold transition flex items-center justify-center gap-1 ${
                       dateFilter === 'YESTERDAY'
-                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                        ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                     }`}
                   >
                     <span>Yesterday</span>
@@ -614,17 +614,17 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                     onClick={() => setDateFilter('ALL')}
                     className={`py-2 px-2 rounded-xl font-mono text-xs font-bold transition flex items-center justify-center gap-1 ${
                       dateFilter === 'ALL'
-                        ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                        ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                     }`}
                   >
                     <span>All Time</span>
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-white/10 text-xs">
-                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="text-slate-400 font-mono text-[11px] shrink-0">Custom Day:</span>
+                <div className="flex items-center gap-2 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 text-xs">
+                  <Clock className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                  <span className="text-zinc-400 font-mono text-[11px] shrink-0">Custom Day:</span>
                   <input
                     type="date"
                     value={customDate}
@@ -632,23 +632,23 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                       setCustomDate(e.target.value);
                       setDateFilter('CUSTOM');
                     }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-amber-300 font-mono text-xs focus:outline-none focus:border-amber-500"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-amber-300 font-mono text-xs focus:outline-none focus:border-zinc-700"
                   />
                 </div>
               </div>
 
               {/* Settlement Channel Distribution */}
-              <div className="bg-slate-950/80 border border-white/10 rounded-2xl p-4 space-y-3">
+              <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
                     <Wallet className="w-3.5 h-3.5 text-amber-400" />
                     <span>Settlement Channels</span>
                   </span>
-                  <span className="text-[10px] text-slate-400">{completedOrders.length} orders</span>
+                  <span className="text-[10px] text-zinc-400">{completedOrders.length} orders</span>
                 </div>
 
                 {/* Progress bar */}
-                <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
+                <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden flex">
                   {netRevenue > 0 && (
                     <>
                       <div
@@ -676,50 +676,50 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1">
-                  <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                  <div className="flex items-center justify-between bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800">
                     <span className="flex items-center gap-1.5 text-blue-400">
                       <span className="w-2 h-2 rounded-full bg-blue-500" /> Cash
                     </span>
-                    <span className="font-bold text-slate-200">{formatBDT(paymentsByMethod.CASH || 0)}</span>
+                    <span className="font-bold text-zinc-200">{formatBDT(paymentsByMethod.CASH || 0)}</span>
                   </div>
 
-                  <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                  <div className="flex items-center justify-between bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800">
                     <span className="flex items-center gap-1.5 text-emerald-400">
                       <span className="w-2 h-2 rounded-full bg-emerald-500" /> Cards
                     </span>
-                    <span className="font-bold text-slate-200">{formatBDT(paymentsByMethod.CARD || 0)}</span>
+                    <span className="font-bold text-zinc-200">{formatBDT(paymentsByMethod.CARD || 0)}</span>
                   </div>
 
-                  <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                  <div className="flex items-center justify-between bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800">
                     <span className="flex items-center gap-1.5 text-pink-400">
                       <span className="w-2 h-2 rounded-full bg-pink-500" /> bKash
                     </span>
-                    <span className="font-bold text-slate-200">{formatBDT(paymentsByMethod.BKASH || 0)}</span>
+                    <span className="font-bold text-zinc-200">{formatBDT(paymentsByMethod.BKASH || 0)}</span>
                   </div>
 
-                  <div className="flex items-center justify-between bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                  <div className="flex items-center justify-between bg-zinc-900 px-2.5 py-1.5 rounded-lg border border-zinc-800">
                     <span className="flex items-center gap-1.5 text-orange-400">
                       <span className="w-2 h-2 rounded-full bg-orange-500" /> Nagad
                     </span>
-                    <span className="font-bold text-slate-200">{formatBDT(paymentsByMethod.NAGAD || 0)}</span>
+                    <span className="font-bold text-zinc-200">{formatBDT(paymentsByMethod.NAGAD || 0)}</span>
                   </div>
                 </div>
               </div>
 
               {/* Hardware Solenoid & Loyalty Card */}
-              <div className="bg-slate-950/80 border border-white/10 rounded-2xl p-4 space-y-2.5 text-xs">
+              <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between font-mono">
-                  <span className="text-slate-400 flex items-center gap-1.5">
+                  <span className="text-zinc-400 flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
                     <span>Drawer Solenoid Pulses</span>
                   </span>
-                  <span className="font-bold text-white bg-slate-900 px-2.5 py-0.5 rounded-md border border-slate-800">
+                  <span className="font-bold text-white bg-zinc-900 px-2.5 py-0.5 rounded-md border border-zinc-800">
                     {drawerLogsCount} times
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between font-mono pt-2 border-t border-slate-800">
-                  <span className="text-slate-400 flex items-center gap-1.5">
+                <div className="flex items-center justify-between font-mono pt-2 border-t border-zinc-800">
+                  <span className="text-zinc-400 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-amber-400" />
                     <span>Loyalty Subsidies Burned</span>
                   </span>
@@ -732,10 +732,10 @@ Status: NBR Mushak-6.3 Certified Closeout`;
             </div>
 
             {/* Bottom Actions */}
-            <div className="pt-4 border-t border-white/10 space-y-2.5 shrink-0">
+            <div className="pt-4 border-t border-zinc-800 space-y-2.5 shrink-0">
               <button
                 onClick={handlePrint}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(212,175,55,0.35)] transition active:scale-95"
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-zinc-950 font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Official Z-Report Now</span>
@@ -743,7 +743,7 @@ Status: NBR Mushak-6.3 Certified Closeout`;
 
               <button
                 onClick={onClose}
-                className="w-full py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition"
+                className="w-full py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition border border-zinc-700"
               >
                 Dismiss Window
               </button>
