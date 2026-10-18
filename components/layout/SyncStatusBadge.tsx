@@ -12,6 +12,9 @@ import {
   Clock,
   HardDrive,
   Check,
+  Trash2,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import { useRestaurantStore } from '@/lib/store';
 
@@ -21,12 +24,21 @@ interface SyncStatusBadgeProps {
 }
 
 export function SyncStatusBadge({ variant = 'admin', className = '' }: SyncStatusBadgeProps) {
-  const { isOnline, outboxQueue, isSyncingOutbox, lastSyncTime, flushOutbox, syncFromDatabase } =
-    useRestaurantStore();
+  const {
+    isOnline,
+    outboxQueue,
+    isSyncingOutbox,
+    lastSyncTime,
+    flushOutbox,
+    syncFromDatabase,
+    clearOutboxQueue,
+    removeOutboxItem,
+  } = useRestaurantStore();
 
   const [isOpen, setIsOpen] = useState(false);
   const [manualSyncLoading, setManualSyncLoading] = useState(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -47,17 +59,24 @@ export function SyncStatusBadge({ variant = 'admin', className = '' }: SyncStatu
   const handleManualSync = async () => {
     setManualSyncLoading(true);
     setSyncSuccessMessage(null);
+    setSyncErrorMessage(null);
     try {
       const res = await flushOutbox();
       await syncFromDatabase();
-      setSyncSuccessMessage(
-        res.processed > 0
-          ? `Successfully synced ${res.processed} pending mutation(s)!`
-          : 'Database is up-to-date and synced.'
-      );
-      setTimeout(() => setSyncSuccessMessage(null), 3500);
-    } catch (err) {
+      if (res.failed > 0) {
+        setSyncErrorMessage(`${res.failed} item(s) failed to sync. Check error details below.`);
+      } else if (res.processed > 0) {
+        setSyncSuccessMessage(`Successfully synced ${res.processed} pending mutation(s)!`);
+      } else {
+        setSyncSuccessMessage('Database is up-to-date and synced.');
+      }
+      setTimeout(() => {
+        setSyncSuccessMessage(null);
+        setSyncErrorMessage(null);
+      }, 4000);
+    } catch (err: any) {
       console.error('Manual sync error:', err);
+      setSyncErrorMessage(err?.message || 'Sync failed. Check connection.');
     } finally {
       setManualSyncLoading(false);
     }
@@ -209,27 +228,44 @@ export function SyncStatusBadge({ variant = 'admin', className = '' }: SyncStatu
             {/* Outbox Queue Preview Items */}
             {pendingCount > 0 ? (
               <div
-                className={`max-h-36 overflow-y-auto rounded-lg p-2 space-y-1.5 text-[11px] font-mono border ${
+                className={`max-h-48 overflow-y-auto rounded-lg p-2 space-y-2 text-[11px] font-mono border ${
                   variant === 'pos-light'
                     ? 'bg-slate-50 border-slate-200 text-slate-700'
                     : 'bg-slate-900/80 border-slate-800 text-slate-300'
                 }`}
               >
-                {outboxQueue.slice(0, 5).map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-2 py-0.5">
-                    <span className="truncate">
-                      • {item.type.replace(/_/g, ' ')}
-                    </span>
-                    <span className="text-[10px] text-amber-400 shrink-0">
-                      {item.attempts > 0 ? `Retried ${item.attempts}x` : 'Queued'}
-                    </span>
+                {outboxQueue.map((item) => (
+                  <div key={item.id} className="p-1.5 rounded bg-black/20 border border-white/5 space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold truncate">
+                        • {item.type.replace(/_/g, ' ')}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                            item.attempts > 0
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : 'bg-amber-500/20 text-amber-300'
+                          }`}
+                        >
+                          {item.attempts > 0 ? `Failed (${item.attempts}x)` : 'Queued'}
+                        </span>
+                        <button
+                          onClick={() => removeOutboxItem(item.id)}
+                          className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                          title="Discard this queue item"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                    {item.lastError && (
+                      <p className="text-[10px] text-rose-400 font-sans leading-tight pl-2 border-l border-rose-500/40 truncate" title={item.lastError}>
+                        {item.lastError}
+                      </p>
+                    )}
                   </div>
                 ))}
-                {pendingCount > 5 && (
-                  <p className="text-[10px] text-slate-500 text-center pt-1">
-                    + {pendingCount - 5} more queued actions...
-                  </p>
-                )}
               </div>
             ) : (
               <div
@@ -259,6 +295,13 @@ export function SyncStatusBadge({ variant = 'admin', className = '' }: SyncStatu
                 <span>{syncSuccessMessage}</span>
               </div>
             )}
+
+            {syncErrorMessage && (
+              <div className="p-2 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>{syncErrorMessage}</span>
+              </div>
+            )}
           </div>
 
           {/* Action Footer */}
@@ -275,6 +318,19 @@ export function SyncStatusBadge({ variant = 'admin', className = '' }: SyncStatu
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
               <span>{isSyncing ? 'Syncing Now...' : 'Force Sync / Replay Outbox'}</span>
             </button>
+            {pendingCount > 0 && (
+              <button
+                onClick={() => {
+                  if (confirm('Clear all pending offline mutations from outbox queue?')) {
+                    clearOutboxQueue();
+                  }
+                }}
+                className="py-2 px-3 rounded-xl font-semibold text-xs border border-rose-500/40 text-rose-400 hover:bg-rose-950/40 transition active:scale-98"
+                title="Clear all stuck queue items"
+              >
+                Clear All
+              </button>
+            )}
           </div>
         </div>
       )}

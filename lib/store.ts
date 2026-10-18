@@ -308,6 +308,18 @@ function mapDbOrderItem(it: DbOrderItem): OrderItem {
 }
 
 function toDbOrder(o: Order) {
+  let cleanPayments = o.payments;
+  if (typeof cleanPayments === 'string') {
+    try {
+      cleanPayments = JSON.parse(cleanPayments);
+    } catch {
+      cleanPayments = [];
+    }
+  }
+  if (!Array.isArray(cleanPayments)) {
+    cleanPayments = o.paymentMethod ? [{ method: o.paymentMethod, amount: o.totalAmount }] : [];
+  }
+
   return {
     id: o.id,
     order_number: o.orderNumber,
@@ -329,7 +341,7 @@ function toDbOrder(o: Order) {
     points_discount_value: o.pointsDiscountValue,
     payment_status: o.paymentStatus,
     payment_method: o.paymentMethod || null,
-    payments: JSON.stringify(o.payments || []),
+    payments: cleanPayments,
     notes: o.notes || null,
     created_at: o.createdAt,
     completed_at: o.completedAt || null,
@@ -337,6 +349,18 @@ function toDbOrder(o: Order) {
 }
 
 function toDbOrderItem(item: OrderItem, orderId: string) {
+  let cleanModifiers = item.selectedModifiers;
+  if (typeof cleanModifiers === 'string') {
+    try {
+      cleanModifiers = JSON.parse(cleanModifiers);
+    } catch {
+      cleanModifiers = [];
+    }
+  }
+  if (!Array.isArray(cleanModifiers)) {
+    cleanModifiers = [];
+  }
+
   return {
     id: item.id || `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     order_id: orderId,
@@ -344,7 +368,7 @@ function toDbOrderItem(item: OrderItem, orderId: string) {
     product_name: item.productName,
     unit_price: item.unitPrice,
     quantity: item.quantity,
-    selected_modifiers: JSON.stringify(item.selectedModifiers || []),
+    selected_modifiers: cleanModifiers,
     special_instructions: item.specialInstructions || null,
     total_price: item.totalPrice,
     created_at: new Date().toISOString(),
@@ -414,11 +438,36 @@ function enqueueOutboxMutation(type: OutboxActionType, payload: any) {
   console.log(`[Outbox Enqueued] ${type} (${item.id}) - Queue size: ${state.outboxQueue.length}`);
 }
 
+function generateNextOrderNumber(): string {
+  let maxNum = 1000;
+  for (const o of state.orders) {
+    const match = o.orderNumber?.match(/TRP-(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+  for (const item of state.outboxQueue) {
+    if (item.type === 'INSERT_ORDER' && item.payload?.orderNumber) {
+      const match = item.payload.orderNumber.match(/TRP-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+  }
+  return `TRP-${maxNum + 1}`;
+}
+
 async function executeDirectMutation(type: OutboxActionType, payload: any): Promise<void> {
   switch (type) {
     case 'INSERT_PRODUCT': {
       const product = payload as Product;
-      const { error } = await insforge.database.from('products').insert([
+      const { error } = await insforge.database.from('products').upsert([
         {
           id: product.id,
           name: product.name,
@@ -468,7 +517,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'INSERT_CATEGORY': {
       const category = payload as Category;
-      const { error } = await insforge.database.from('categories').insert([
+      const { error } = await insforge.database.from('categories').upsert([
         {
           id: category.id,
           name: category.name,
@@ -506,7 +555,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'INSERT_TABLE': {
       const table = payload as Table;
-      const { error } = await insforge.database.from('dining_tables').insert([
+      const { error } = await insforge.database.from('dining_tables').upsert([
         {
           id: table.id,
           table_number: table.tableNumber,
@@ -551,7 +600,41 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'INSERT_CUSTOMER': {
       const customer = payload as Customer;
-      const { error } = await insforge.database.from('customers').insert([
+      // 1. Check if customer with this phone number already exists in DB
+      const { data: existingCust } = await insforge.database
+        .from('customers')
+        .select('id, points_balance, total_spent, visit_count')
+        .eq('phone', customer.phone)
+        .maybeSingle();
+
+      if (existingCust) {
+        // Customer already exists in cloud! Update stats and link IDs seamlessly
+        const updatedBalance = Math.max(Number(existingCust.points_balance) || 0, customer.pointsBalance);
+        const updatedSpent = Math.max(Number(existingCust.total_spent) || 0, customer.totalSpent);
+        const updatedVisits = Math.max(Number(existingCust.visit_count) || 0, customer.visitCount);
+
+        await insforge.database.from('customers').update({
+          points_balance: updatedBalance,
+          total_spent: updatedSpent,
+          visit_count: updatedVisits,
+        }).eq('id', existingCust.id);
+
+        // Update any remaining items in outbox queue that reference the temporary offline customer.id
+        for (const queueItem of state.outboxQueue) {
+          if (queueItem.type === 'INSERT_ORDER' && queueItem.payload?.customerId === customer.id) {
+            queueItem.payload.customerId = existingCust.id;
+          }
+        }
+        // Also update local cache
+        state.customers = state.customers.map((c) =>
+          c.phone === customer.phone ? { ...c, id: existingCust.id } : c
+        );
+        saveToStorage();
+        break;
+      }
+
+      // 2. New customer: upsert to database safely
+      const { error } = await insforge.database.from('customers').upsert([
         {
           id: customer.id,
           name: customer.name,
@@ -566,7 +649,10 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
           created_at: customer.joinedAt,
         },
       ]);
-      if (error) throw new Error(error.message || 'Error inserting customer');
+      // Ignore 23505 (phone already exists if a concurrent insert won race)
+      if (error && error.code !== '23505') {
+        throw new Error(error.message || 'Error inserting customer');
+      }
       break;
     }
     case 'UPDATE_CUSTOMER': {
@@ -582,12 +668,91 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'INSERT_ORDER': {
       const order = payload as Order;
-      // Upsert/Insert order
-      const { error: orderError } = await insforge.database.from('orders').insert([toDbOrder(order)]);
+
+      // 1. Sanitize customer_id against foreign key constraint
+      let safeCustomerId = order.customerId || null;
+      if (safeCustomerId) {
+        const { data: custExists } = await insforge.database
+          .from('customers')
+          .select('id')
+          .eq('id', safeCustomerId)
+          .maybeSingle();
+        if (!custExists) {
+          // If customer ID doesn't exist, try looking up by phone
+          if (order.customerPhone) {
+            const { data: custByPhone } = await insforge.database
+              .from('customers')
+              .select('id')
+              .eq('phone', order.customerPhone.trim())
+              .maybeSingle();
+            safeCustomerId = custByPhone?.id || null;
+          } else {
+            safeCustomerId = null;
+          }
+        }
+      }
+
+      // 2. Sanitize table_id against foreign key constraint
+      let safeTableId = order.tableId || null;
+      if (safeTableId) {
+        const { data: tblExists } = await insforge.database
+          .from('dining_tables')
+          .select('id')
+          .eq('id', safeTableId)
+          .maybeSingle();
+        if (!tblExists) {
+          safeTableId = null;
+        }
+      }
+
+      // 3. Resolve order_number collisions with existing orders
+      let finalOrderNumber = order.orderNumber;
+      const { data: existingWithNumber } = await insforge.database
+        .from('orders')
+        .select('id, order_number')
+        .eq('order_number', finalOrderNumber)
+        .maybeSingle();
+
+      if (existingWithNumber && existingWithNumber.id !== order.id) {
+        finalOrderNumber = `${order.orderNumber}-${Math.floor(100 + Math.random() * 900)}`;
+        order.orderNumber = finalOrderNumber;
+        state.orders = state.orders.map((o) => (o.id === order.id ? { ...o, orderNumber: finalOrderNumber } : o));
+        saveToStorage();
+      }
+
+      const dbOrderRecord = {
+        ...toDbOrder(order),
+        customer_id: safeCustomerId,
+        table_id: safeTableId,
+        order_number: finalOrderNumber,
+      };
+
+      // 4. Upsert Order (never fails with duplicate primary key on retry)
+      const { error: orderError } = await insforge.database.from('orders').upsert([dbOrderRecord]);
       if (orderError) throw new Error(orderError.message || 'Error inserting order');
+
+      // 5. Sanitize and upsert order items
       if (order.items && order.items.length > 0) {
-        const dbItems = order.items.map((it) => toDbOrderItem(it, order.id));
-        const { error: itemsError } = await insforge.database.from('order_items').insert(dbItems);
+        const dbItems = await Promise.all(
+          order.items.map(async (it) => {
+            let safeProductId = it.productId || null;
+            if (safeProductId) {
+              const { data: prodExists } = await insforge.database
+                .from('products')
+                .select('id')
+                .eq('id', safeProductId)
+                .maybeSingle();
+              if (!prodExists) {
+                safeProductId = null;
+              }
+            }
+            const mapped = toDbOrderItem(it, order.id);
+            mapped.product_id = safeProductId;
+            return mapped;
+          })
+        );
+
+        const { error: itemsError } = await insforge.database.from('order_items').upsert(dbItems);
         if (itemsError) throw new Error(itemsError.message || 'Error inserting order items');
       }
       break;
@@ -599,10 +764,18 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
         payments: unknown;
         completedAt: string;
       };
+      let cleanPayments = payments;
+      if (typeof cleanPayments === 'string') {
+        try { cleanPayments = JSON.parse(cleanPayments); } catch { cleanPayments = []; }
+      }
+      if (!Array.isArray(cleanPayments)) {
+        cleanPayments = [{ method: paymentMethod, amount: 0 }];
+      }
+
       const { error } = await insforge.database.from('orders').update({
         payment_status: 'PAID',
         payment_method: paymentMethod,
-        payments: JSON.stringify(payments),
+        payments: cleanPayments,
         status: 'COMPLETED',
         completed_at: completedAt,
       }).eq('id', orderId);
@@ -617,7 +790,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'INSERT_DRAWER_LOG': {
       const log = payload as DrawerLogEntry;
-      const { error } = await insforge.database.from('drawer_logs').insert([
+      const { error } = await insforge.database.from('drawer_logs').upsert([
         {
           id: log.id,
           reason: log.reason,
@@ -684,18 +857,19 @@ async function flushOutboxQueue(): Promise<{ processed: number; failed: number }
       console.log(`[Auto-Replay Engine] Replayed mutation (${item.type} - ${item.id}) successfully.`);
     } catch (err: any) {
       console.error(`[Auto-Replay Engine] Replay failed for ${item.type} (${item.id}):`, err);
-      item.attempts += 1;
+      item.attempts = (item.attempts || 0) + 1;
       item.lastError = err?.message || String(err);
       failedCount++;
-      // Keep remaining items if network is interrupted
-      remainingQueue.push(item);
 
       // If connection was lost during loop, keep the rest for next cycle
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         state.isOnline = false;
+        remainingQueue.push(item);
         remainingQueue.push(...state.outboxQueue.slice(i + 1));
         break;
       }
+
+      remainingQueue.push(item);
     }
   }
 
@@ -996,9 +1170,16 @@ async function syncFromDatabase() {
         itemsByOrderId.set(it.order_id, existing);
       });
 
-      state.orders = (ordersData as DbOrder[]).map((o) =>
+      const cloudOrders = (ordersData as DbOrder[]).map((o) =>
         mapDbOrder(o, itemsByOrderId.get(o.id) || [])
       );
+
+      const cloudOrderIds = new Set(cloudOrders.map((o) => o.id));
+      const pendingLocalOrders = state.orders.filter(
+        (o) => !cloudOrderIds.has(o.id)
+      );
+
+      state.orders = [...pendingLocalOrders, ...cloudOrders];
     }
 
     if (drawerLogsData && drawerLogsData.length > 0) {
@@ -1308,7 +1489,7 @@ export const restaurantStore = {
 
     const newOrder: Order = {
       id: `ord-${Date.now()}`,
-      orderNumber: `TRP-${1000 + state.orders.length + 1}`,
+      orderNumber: generateNextOrderNumber(),
       orderType: orderData.orderType,
       tableId: orderData.tableId,
       tableNumber: tableObj?.tableNumber,
@@ -1446,6 +1627,18 @@ export const restaurantStore = {
     notify();
 
     dbUpdateSettings(newSettings);
+  },
+
+  clearOutboxQueue() {
+    state.outboxQueue = [];
+    saveToStorage();
+    notify();
+  },
+
+  removeOutboxItem(id: string) {
+    state.outboxQueue = state.outboxQueue.filter((item) => item.id !== id);
+    saveToStorage();
+    notify();
   },
 
   resetToDefaultSeed() {
