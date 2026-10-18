@@ -25,12 +25,16 @@ import {
   Percent,
   Sun,
   Moon,
+  Lock,
+  User,
 } from 'lucide-react';
 import { useRestaurantStore } from '@/lib/store';
-import { Order, OrderItem, PaymentMethod, Product, Table } from '@/types';
+import { Order, OrderItem, PaymentMethod, Product, Table, StaffMember } from '@/types';
 import { formatBDT } from '@/lib/formatters';
 import { ThermalReceiptModal } from '@/components/pos/ThermalReceiptModal';
 import { SyncStatusBadge } from '@/components/layout/SyncStatusBadge';
+import { PosLockScreen } from '@/components/pos/PosLockScreen';
+import { getActiveStaff, clearActiveStaff } from '@/lib/pos-auth';
 
 export default function POSPage() {
   const {
@@ -47,6 +51,33 @@ export default function POSPage() {
 
   // Dark Mode Theme State
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+
+  // Cashier PIN Lock & Staff Session State (100% Offline Capable)
+  const [activeStaff, setActiveStaff] = useState<StaffMember | null>(null);
+  const [isLocked, setIsLocked] = useState<boolean>(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+
+  useEffect(() => {
+    const existing = getActiveStaff();
+    if (existing) {
+      setActiveStaff(existing);
+      setIsLocked(false);
+    } else {
+      setIsLocked(true);
+    }
+    setIsCheckingAuth(false);
+  }, []);
+
+  const handleUnlock = (staff: StaffMember) => {
+    setActiveStaff(staff);
+    setIsLocked(false);
+  };
+
+  const handleLockTerminal = () => {
+    clearActiveStaff();
+    setActiveStaff(null);
+    setIsLocked(true);
+  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('pos-theme');
@@ -302,6 +333,7 @@ export default function POSPage() {
         paymentStatus: 'PAID',
         paymentMethod,
         notes: customerSearch ? `Customer: ${customerSearch}` : undefined,
+        serverName: activeStaff?.name || 'Cashier',
       });
 
       // 3. Prepare receipt modal
@@ -320,6 +352,7 @@ export default function POSPage() {
         customerName: activeCustomerName || customerSearch || undefined,
         customerPhone: activeCustomerPhone || undefined,
         tableNumber: isDineIn ? tables.find((t) => t.id === selectedTableId)?.tableNumber : undefined,
+        serverName: activeStaff?.name || 'Cashier',
       };
 
       setCompletedOrderForReceipt(receiptOrder);
@@ -339,8 +372,12 @@ export default function POSPage() {
   };
 
   const handleManualKickDrawer = async () => {
-    await kickDrawer('Cashier Key Latch Open', undefined, undefined);
+    await kickDrawer(`${activeStaff?.name || 'Cashier'}: Key Latch Open`, undefined, undefined);
   };
+
+  if (!isCheckingAuth && isLocked) {
+    return <PosLockScreen onUnlock={handleUnlock} />;
+  }
 
   return (
     <div
@@ -428,6 +465,35 @@ export default function POSPage() {
                   )}
                 </div>
               </div>
+
+              {/* Active Cashier Badge */}
+              {activeStaff && (
+                <div
+                  className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold shrink-0 ${
+                    isDarkMode
+                      ? 'bg-[#141414] border-[#2c2c2c] text-white'
+                      : 'bg-white border-slate-200 text-slate-800'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="truncate max-w-[100px]">{activeStaff.name.split(' ')[0]}</span>
+                  <span className="text-[10px] font-mono text-neutral-400 font-normal">({activeStaff.role})</span>
+                </div>
+              )}
+
+              {/* Lock Terminal Button */}
+              <button
+                onClick={handleLockTerminal}
+                title="Lock POS Terminal (Requires PIN)"
+                className={`h-10 px-2.5 rounded-lg border flex items-center gap-1.5 transition text-xs font-bold shrink-0 cursor-pointer ${
+                  isDarkMode
+                    ? 'border-[#333333] text-amber-300 bg-[#171717] hover:bg-[#262626]'
+                    : 'border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <Lock className="w-4 h-4 text-amber-400" />
+                <span className="hidden md:inline">Lock</span>
+              </button>
 
               {/* Network & Offline Outbox Status Badge */}
               <SyncStatusBadge variant={isDarkMode ? 'pos-dark' : 'pos-light'} />

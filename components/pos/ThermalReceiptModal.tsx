@@ -74,8 +74,13 @@ export function ThermalReceiptModal({
               </div>
               <div className="flex justify-between">
                 <span>Date: {formatDateTime(order.createdAt)}</span>
-                {order.tableNumber && <span>Table: <strong>{order.tableNumber}</strong></span>}
+                <span>Cashier: <strong>{order.serverName || 'Counter Staff'}</strong></span>
               </div>
+              {order.tableNumber && (
+                <div className="flex justify-between">
+                  <span>Table: <strong>{order.tableNumber}</strong></span>
+                </div>
+              )}
               {order.customerName && (
                 <div className="flex justify-between text-gray-800">
                   <span>Guest: {order.customerName}</span>

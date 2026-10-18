@@ -164,3 +164,11 @@ export interface SystemSettings {
   drawerKickCodeHex: string; // "1B 70 00 19 FA"
   receiptFooterMessage: string;
 }
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: 'MANAGER' | 'CASHIER' | 'SERVER';
+  pin: string;
+}
+

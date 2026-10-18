@@ -1587,6 +1587,7 @@ export const restaurantStore = {
     status?: OrderStatus;
     paymentStatus?: PaymentStatus;
     paymentMethod?: PaymentMethod;
+    serverName?: string;
   }): Order {
     const subtotal = orderData.items.reduce((sum, item) => sum + item.totalPrice, 0);
     const taxAmount = 0;
@@ -1662,6 +1663,7 @@ export const restaurantStore = {
       notes: orderData.notes,
       createdAt: new Date().toISOString(),
       completedAt,
+      serverName: orderData.serverName,
     };
 
     state.orders = [newOrder, ...state.orders];
