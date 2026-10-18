@@ -124,18 +124,44 @@
   box-shadow: 0 20px 30px -10px rgba(0, 15, 80, 0.12), 0 10px 15px -5px rgba(0, 15, 80, 0.06);
 }
 
-/* Thermal Receipt Print Styles */
+/* Thermal Receipt & Z-Report Print Styles */
 @media print {
+  @page {
+    size: auto;
+    margin: 0mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
   body * {
     visibility: hidden;
   }
-  #thermal-receipt, #thermal-receipt * {
+
+  /* Only allow thermal receipt and Z-report to be visible */
+  #thermal-receipt, #thermal-receipt *,
+  #printable-z-report, #printable-z-report * {
     visibility: visible;
   }
+
+  /* Reset any modal wrappers during printing */
+  .z-report-modal-backdrop,
+  .z-report-modal-backdrop * {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
   #thermal-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 80mm !important;
     max-width: 80mm !important;
     padding: 2mm 3mm !important;
@@ -144,5 +170,34 @@
     color: #000000 !important;
     font-family: 'Courier New', Courier, monospace !important;
     font-size: 11px !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  #printable-z-report {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    padding: 3mm 4mm !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    font-size: 11px !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  #printable-z-report.print-format-a4 {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 190mm !important;
+    padding: 10mm 12mm !important;
+    margin: 0 auto !important;
+    font-size: 12px !important;
   }
 }
