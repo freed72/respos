@@ -5,6 +5,7 @@ import { Order, SystemSettings } from '@/types';
 import { formatBDT, formatDateTime } from '@/lib/formatters';
 import { Printer, KeyRound, X, CheckCircle, Sparkles } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { useRestaurantStore } from '@/lib/store';
 
 interface ThermalReceiptModalProps {
   order: Order;
@@ -19,6 +20,11 @@ export function ThermalReceiptModal({
   onClose,
   onKickDrawer,
 }: ThermalReceiptModalProps) {
+  const { customers } = useRestaurantStore();
+  const matchedCustomer = customers.find(
+    (c) => c.id === order.customerId || (order.customerPhone && c.phone.replace(/\D/g, '').endsWith(order.customerPhone.trim().replace(/\D/g, '')))
+  );
+
   const handlePrint = () => {
     window.print();
   };
@@ -156,14 +162,27 @@ export function ThermalReceiptModal({
             </div>
 
             {/* Loyalty Rewards on this visit */}
-            {order.pointsEarned > 0 && (
-              <div className="py-2.5 border-b border-dashed border-gray-400 text-center bg-gray-50 rounded my-1.5 p-1.5">
+            {(order.pointsEarned > 0 || (order.pointsRedeemed && order.pointsRedeemed > 0) || matchedCustomer) && (
+              <div className="py-2.5 border-b border-dashed border-gray-400 text-center bg-gray-50 rounded my-1.5 p-2 space-y-1">
                 <div className="text-[10px] font-bold text-indigo-900 uppercase flex items-center justify-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Royal Rewards Earned!
+                  <Sparkles className="w-3 h-3 text-amber-500" /> Royal Rewards Summary
                 </div>
-                <div className="text-xs font-black text-gray-900">
-                  +{order.pointsEarned} Points Added to Wallet
-                </div>
+                {order.pointsEarned > 0 && (
+                  <div className="text-xs font-black text-emerald-800">
+                    +{order.pointsEarned} Points Added to Wallet
+                  </div>
+                )}
+                {order.pointsRedeemed !== undefined && order.pointsRedeemed > 0 && (
+                  <div className="text-xs font-bold text-amber-700">
+                    -{order.pointsRedeemed} Points Redeemed (-{formatBDT(order.pointsDiscountValue)})
+                  </div>
+                )}
+                {matchedCustomer && (
+                  <div className="text-[10px] font-bold font-mono text-indigo-950 pt-1 border-t border-gray-200 flex justify-between px-1">
+                    <span>VIP Member: {matchedCustomer.name}</span>
+                    <span>Balance: {matchedCustomer.pointsBalance} PTS</span>
+                  </div>
+                )}
                 <div className="text-[9px] text-gray-600">
                   Redeem 1 Pt = ৳1 BDT on your next banquet
                 </div>

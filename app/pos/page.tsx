@@ -94,18 +94,28 @@ export default function POSPage() {
     }
   };
 
-  // Auto-detect Customer by input (Phone or Name) - triggers only after 11 characters typed
+  // Auto-detect Customer by input (Phone or Name)
   const identifiedCustomer = useMemo(() => {
     const q = customerSearch.trim().toLowerCase();
-    const cleanedPhone = q.replace(/[\s-]/g, '');
-    if (cleanedPhone.length < 11 && q.length < 11) return null;
-    return (
-      customers.find(
-        (c) =>
-          c.phone.replace(/[\s-]/g, '').includes(cleanedPhone) ||
-          c.name.toLowerCase().includes(q)
-      ) || null
-    );
+    if (!q) return null;
+    const cleanedDigits = q.replace(/\D/g, '');
+
+    // Match phone if at least 6 digits typed (e.g. partial/suffix phone number)
+    if (cleanedDigits.length >= 6) {
+      const match = customers.find((c) => {
+        const cDigits = c.phone.replace(/\D/g, '');
+        return cDigits.endsWith(cleanedDigits) || cleanedDigits.endsWith(cDigits) || cDigits.includes(cleanedDigits);
+      });
+      if (match) return match;
+    }
+
+    // Match name if at least 2 characters typed
+    if (q.length >= 2) {
+      const match = customers.find((c) => c.name.toLowerCase().includes(q));
+      if (match) return match;
+    }
+
+    return null;
   }, [customerSearch, customers]);
 
   const availableCustomerPoints = identifiedCustomer?.pointsBalance || 0;
@@ -225,11 +235,12 @@ export default function POSPage() {
   const taxAmount = 0;
   const isDineIn = orderType === 'DINE_IN';
   const serviceChargeAmount = 0;
+  const afterDiscount = Math.max(0, subtotal - discountAmount);
   const maxRedeemablePoints = Math.min(
     availableCustomerPoints,
-    Math.floor(subtotal / (settings.loyaltyRedemptionRate || 1))
+    Math.floor(afterDiscount / (settings.loyaltyRedemptionRate || 1))
   );
-  const pointsDiscountValue = pointsToRedeem * settings.loyaltyRedemptionRate;
+  const pointsDiscountValue = pointsToRedeem * (settings.loyaltyRedemptionRate || 1);
 
   const totalPayable = Math.max(
     0,
@@ -249,22 +260,27 @@ export default function POSPage() {
     }
 
     try {
-      // Auto-resolve or register customer if 11-digit phone number typed in customerSearch
+      // Auto-resolve or register customer
       let activeCustomerId = identifiedCustomer?.id;
       let activeCustomerName = identifiedCustomer?.name;
       let activeCustomerPhone = identifiedCustomer?.phone;
 
-      const cleanedPhone = customerSearch.trim().replace(/[\s-]/g, '');
-      if (!activeCustomerId && cleanedPhone.length >= 11) {
-        const existing = customers.find((c) => c.phone.replace(/[\s-]/g, '') === cleanedPhone);
+      const trimmedInput = customerSearch.trim();
+      const cleanedDigits = trimmedInput.replace(/\D/g, '');
+
+      if (!activeCustomerId && cleanedDigits.length >= 10) {
+        const existing = customers.find((c) => {
+          const cDigits = c.phone.replace(/\D/g, '');
+          return cDigits.endsWith(cleanedDigits) || cleanedDigits.endsWith(cDigits) || cDigits === cleanedDigits;
+        });
         if (existing) {
           activeCustomerId = existing.id;
           activeCustomerName = existing.name;
           activeCustomerPhone = existing.phone;
         } else {
           const newCustomer = addCustomer({
-            name: `Guest ${cleanedPhone.slice(-4)}`,
-            phone: customerSearch.trim(),
+            name: `Guest ${cleanedDigits.slice(-4)}`,
+            phone: trimmedInput,
           });
           activeCustomerId = newCustomer.id;
           activeCustomerName = newCustomer.name;
@@ -278,7 +294,7 @@ export default function POSPage() {
         tableId: isDineIn ? selectedTableId : undefined,
         customerId: activeCustomerId,
         customerName: activeCustomerName || (customerSearch.trim() || undefined),
-        customerPhone: activeCustomerPhone || (cleanedPhone.length >= 11 ? customerSearch.trim() : undefined),
+        customerPhone: activeCustomerPhone || (cleanedDigits.length >= 10 ? trimmedInput : undefined),
         items: cartItems,
         discountAmount,
         pointsToRedeem,
@@ -667,7 +683,7 @@ export default function POSPage() {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Guest phone (11 digits e.g. 01711...)"
+                  placeholder="Guest phone or name (e.g. 01711...)"
                   value={customerSearch}
                   onChange={(e) => {
                     setCustomerSearch(e.target.value);
@@ -697,6 +713,51 @@ export default function POSPage() {
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
+                )}
+
+                {/* Instant Autocomplete Match Dropdown */}
+                {customerSearch.length >= 2 && !identifiedCustomer && (
+                  (() => {
+                    const q = customerSearch.trim().toLowerCase();
+                    const matches = customers.filter(
+                      (c) => c.name.toLowerCase().includes(q) || c.phone.includes(q)
+                    ).slice(0, 4);
+
+                    if (matches.length === 0) return null;
+
+                    return (
+                      <div
+                        className={`absolute left-0 right-0 top-full mt-1 z-30 rounded-lg shadow-xl border overflow-hidden ${
+                          isDarkMode ? 'bg-[#181818] border-[#2e2e2e]' : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        {matches.map((cust) => (
+                          <button
+                            key={cust.id}
+                            type="button"
+                            onClick={() => {
+                              setCustomerSearch(cust.phone);
+                              setPointsToRedeem(0);
+                              setCustomPointsVal('');
+                            }}
+                            className={`w-full text-left px-3 py-1.5 flex items-center justify-between text-xs transition border-b last:border-b-0 ${
+                              isDarkMode
+                                ? 'hover:bg-[#252525] border-[#222] text-white'
+                                : 'hover:bg-slate-50 border-slate-100 text-slate-900'
+                            }`}
+                          >
+                            <div>
+                              <span className="font-bold">{cust.name}</span>
+                              <span className="text-[10px] text-neutral-400 font-mono ml-2">{cust.phone}</span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-amber-400">
+                              {cust.tier} • {cust.pointsBalance} pts
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -55,6 +55,18 @@ export default function LoyaltyPage() {
   // Live Calculator State
   const [simSpend, setSimSpend] = useState<number>(3500);
   const [simTierOverride, setSimTierOverride] = useState<LoyaltyTier | null>(null);
+
+  // Synchronize active customer card with store updates (orders, points changes)
+  useEffect(() => {
+    if (activeCustomer) {
+      const fresh = customers.find((c) => c.id === activeCustomer.id || c.phone === activeCustomer.phone);
+      if (fresh && (fresh.pointsBalance !== activeCustomer.pointsBalance || fresh.totalSpent !== activeCustomer.totalSpent || fresh.tier !== activeCustomer.tier)) {
+        setActiveCustomer(fresh);
+      }
+    } else if (customers.length > 0) {
+      setActiveCustomer(customers[0]);
+    }
+  }, [customers, activeCustomer]);
 
   // New Member Form
   const [formData, setFormData] = useState({

@@ -601,22 +601,28 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     case 'INSERT_CUSTOMER': {
       const customer = payload as Customer;
       // 1. Check if customer with this phone number already exists in DB
+      const cleanPhone = customer.phone ? customer.phone.trim() : '';
       const { data: existingCust } = await insforge.database
         .from('customers')
-        .select('id, points_balance, total_spent, visit_count')
-        .eq('phone', customer.phone)
+        .select('id, points_balance, total_spent, visit_count, tier')
+        .eq('phone', cleanPhone)
         .maybeSingle();
 
       if (existingCust) {
-        // Customer already exists in cloud! Update stats and link IDs seamlessly
-        const updatedBalance = Math.max(Number(existingCust.points_balance) || 0, customer.pointsBalance);
-        const updatedSpent = Math.max(Number(existingCust.total_spent) || 0, customer.totalSpent);
-        const updatedVisits = Math.max(Number(existingCust.visit_count) || 0, customer.visitCount);
+        // Customer already exists in cloud Postgres!
+        // The offline customer was created with 50 initial welcome points.
+        // Any difference from 50 represents points earned / redeemed offline on this device.
+        const offlinePointsDelta = customer.pointsBalance - 50;
+        const updatedBalance = Math.max(0, (Number(existingCust.points_balance) || 0) + offlinePointsDelta);
+        const updatedSpent = (Number(existingCust.total_spent) || 0) + (customer.totalSpent || 0);
+        const updatedVisits = (Number(existingCust.visit_count) || 0) + (customer.visitCount || 0);
+        const updatedTier = calculateTier(updatedSpent, state.settings);
 
         await insforge.database.from('customers').update({
           points_balance: updatedBalance,
           total_spent: updatedSpent,
           visit_count: updatedVisits,
+          tier: updatedTier,
         }).eq('id', existingCust.id);
 
         // Update any remaining items in outbox queue that reference the temporary offline customer.id
@@ -624,10 +630,18 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
           if (queueItem.type === 'INSERT_ORDER' && queueItem.payload?.customerId === customer.id) {
             queueItem.payload.customerId = existingCust.id;
           }
+          if (queueItem.type === 'UPDATE_CUSTOMER' && queueItem.payload?.customerId === customer.id) {
+            queueItem.payload.customerId = existingCust.id;
+            if (queueItem.payload.customer) {
+              queueItem.payload.customer.id = existingCust.id;
+            }
+          }
         }
         // Also update local cache
         state.customers = state.customers.map((c) =>
-          c.phone === customer.phone ? { ...c, id: existingCust.id } : c
+          c.phone === customer.phone || c.id === customer.id
+            ? { ...c, id: existingCust.id, pointsBalance: updatedBalance, totalSpent: updatedSpent, visitCount: updatedVisits, tier: updatedTier }
+            : c
         );
         saveToStorage();
         break;
@@ -638,7 +652,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
         {
           id: customer.id,
           name: customer.name,
-          phone: customer.phone,
+          phone: cleanPhone,
           email: customer.email || null,
           tier: customer.tier,
           points_balance: customer.pointsBalance,
@@ -657,13 +671,61 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'UPDATE_CUSTOMER': {
       const { customerId, customer } = payload as { customerId: string; customer: Customer };
-      const { error } = await insforge.database.from('customers').update({
-        points_balance: customer.pointsBalance,
-        total_spent: customer.totalSpent,
-        visit_count: customer.visitCount,
-        tier: customer.tier,
-      }).eq('id', customerId);
-      if (error) throw new Error(error.message || 'Error updating customer');
+      // Try to find customer by id OR by phone
+      let targetId = customerId;
+      const { data: byId } = await insforge.database
+        .from('customers')
+        .select('id, points_balance, total_spent, visit_count, tier')
+        .eq('id', targetId)
+        .maybeSingle();
+
+      let targetRecord = byId;
+      if (!targetRecord && customer.phone) {
+        const { data: byPhone } = await insforge.database
+          .from('customers')
+          .select('id, points_balance, total_spent, visit_count, tier')
+          .eq('phone', customer.phone.trim())
+          .maybeSingle();
+        if (byPhone) {
+          targetId = byPhone.id;
+          targetRecord = byPhone;
+        }
+      }
+
+      if (targetRecord && targetId) {
+        // If customer was remapped from a temporary offline ID ('cust-...') to an existing cloud record
+        const isTemporaryRemapped = customer.id !== targetId || customer.id.startsWith('cust-');
+
+        let finalPoints = customer.pointsBalance;
+        let finalSpent = customer.totalSpent;
+        let finalVisits = customer.visitCount;
+        let finalTier = customer.tier;
+
+        if (isTemporaryRemapped && targetRecord.id !== customer.id) {
+          // It was remapped to an existing cloud customer with separate prior history
+          const offlinePointsDelta = customer.pointsBalance - 50;
+          finalPoints = Math.max(0, (Number(targetRecord.points_balance) || 0) + offlinePointsDelta);
+          finalSpent = (Number(targetRecord.total_spent) || 0) + (customer.totalSpent || 0);
+          finalVisits = (Number(targetRecord.visit_count) || 0) + (customer.visitCount || 0);
+          finalTier = calculateTier(finalSpent, state.settings);
+        }
+
+        const { error } = await insforge.database.from('customers').update({
+          points_balance: finalPoints,
+          total_spent: finalSpent,
+          visit_count: finalVisits,
+          tier: finalTier,
+        }).eq('id', targetId);
+        if (error) throw new Error(error.message || 'Error updating customer');
+
+        // Reflect in local state as well
+        state.customers = state.customers.map((c) =>
+          c.id === targetId || (customer.phone && c.phone === customer.phone)
+            ? { ...c, id: targetId, pointsBalance: finalPoints, totalSpent: finalSpent, visitCount: finalVisits, tier: finalTier }
+            : c
+        );
+        saveToStorage();
+      }
       break;
     }
     case 'INSERT_ORDER': {
@@ -754,6 +816,19 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
 
         const { error: itemsError } = await insforge.database.from('order_items').upsert(dbItems);
         if (itemsError) throw new Error(itemsError.message || 'Error inserting order items');
+      }
+
+      // 6. Ensure customer loyalty points are securely synced if customer was linked
+      if (safeCustomerId && order.status === 'COMPLETED') {
+        const localCust = state.customers.find((c) => c.id === safeCustomerId);
+        if (localCust) {
+          await insforge.database.from('customers').update({
+            points_balance: localCust.pointsBalance,
+            total_spent: localCust.totalSpent,
+            visit_count: localCust.visitCount,
+            tier: localCust.tier,
+          }).eq('id', safeCustomerId);
+        }
       }
       break;
     }
@@ -1156,7 +1231,55 @@ async function syncFromDatabase() {
     }
 
     if (customersData && customersData.length > 0) {
-      state.customers = (customersData as DbCustomer[]).map(mapDbCustomer);
+      const cloudCustomers = (customersData as DbCustomer[]).map(mapDbCustomer);
+      const cloudCustIds = new Set(cloudCustomers.map((c) => c.id));
+      const cloudCustPhones = new Set(cloudCustomers.map((c) => c.phone.replace(/[\s-]/g, '')));
+
+      // Identify customers with pending offline outbox mutations
+      const pendingCustomerIds = new Set<string>();
+      const pendingCustomerPhones = new Set<string>();
+      for (const item of state.outboxQueue) {
+        if (item.type === 'INSERT_CUSTOMER' && item.payload) {
+          pendingCustomerIds.add(item.payload.id);
+          if (item.payload.phone) pendingCustomerPhones.add(item.payload.phone.replace(/[\s-]/g, ''));
+        }
+        if (item.type === 'UPDATE_CUSTOMER' && item.payload) {
+          pendingCustomerIds.add(item.payload.customerId);
+          if (item.payload.customer?.phone) pendingCustomerPhones.add(item.payload.customer.phone.replace(/[\s-]/g, ''));
+        }
+        if (item.type === 'INSERT_ORDER' && item.payload?.customerId) {
+          pendingCustomerIds.add(item.payload.customerId);
+          if (item.payload.customerPhone) pendingCustomerPhones.add(item.payload.customerPhone.replace(/[\s-]/g, ''));
+        }
+      }
+
+      // Merge: preserve local customer stats if they have pending outbox mutations
+      const mergedCustomers = cloudCustomers.map((cloudCust) => {
+        const cleanPhone = cloudCust.phone.replace(/[\s-]/g, '');
+        const localCust = state.customers.find(
+          (c) => c.id === cloudCust.id || c.phone.replace(/[\s-]/g, '') === cleanPhone
+        );
+        if (localCust && (pendingCustomerIds.has(localCust.id) || pendingCustomerPhones.has(cleanPhone))) {
+          return {
+            ...cloudCust,
+            pointsBalance: localCust.pointsBalance,
+            totalSpent: localCust.totalSpent,
+            visitCount: localCust.visitCount,
+            tier: localCust.tier,
+          };
+        }
+        return cloudCust;
+      });
+
+      // Also preserve any newly created offline customers that are not yet in the cloud database
+      for (const localCust of state.customers) {
+        const cleanPhone = localCust.phone.replace(/[\s-]/g, '');
+        if (!cloudCustIds.has(localCust.id) && !cloudCustPhones.has(cleanPhone)) {
+          mergedCustomers.push(localCust);
+        }
+      }
+
+      state.customers = mergedCustomers;
     }
 
     if (ordersData && ordersData.length > 0) {
@@ -1204,16 +1327,28 @@ async function syncFromDatabase() {
 }
 
 // Calculate customer Tier dynamically based on total spend in BDT
-export function calculateTier(totalSpent: number, settings: SystemSettings): LoyaltyTier {
-  if (totalSpent >= settings.tierSpendThresholds.ROYAL) return 'ROYAL';
-  if (totalSpent >= settings.tierSpendThresholds.GOLD) return 'GOLD';
-  if (totalSpent >= settings.tierSpendThresholds.SILVER) return 'SILVER';
+export function calculateTier(totalSpent: number, settings?: SystemSettings): LoyaltyTier {
+  const thresholds = settings?.tierSpendThresholds || {
+    SILVER: 10000,
+    GOLD: 35000,
+    ROYAL: 80000,
+  };
+  if (totalSpent >= thresholds.ROYAL) return 'ROYAL';
+  if (totalSpent >= thresholds.GOLD) return 'GOLD';
+  if (totalSpent >= thresholds.SILVER) return 'SILVER';
   return 'BRONZE';
 }
 
-export function calculatePointsEarned(amount: number, tier: LoyaltyTier, settings: SystemSettings): number {
-  const rate = settings.loyaltyPointsPer100BDT[tier] || 1;
-  return Math.floor((amount / 100) * rate);
+export function calculatePointsEarned(amount: number, tier: LoyaltyTier, settings?: SystemSettings): number {
+  if (amount <= 0) return 0;
+  const rates = settings?.loyaltyPointsPer100BDT || {
+    BRONZE: 1,
+    SILVER: 1.5,
+    GOLD: 2,
+    ROYAL: 3,
+  };
+  const rate = rates[tier] || 1;
+  return Math.round((amount / 100) * rate);
 }
 
 let networkListenersAttached = false;
@@ -1232,12 +1367,16 @@ export const restaurantStore = {
     if (typeof window !== 'undefined' && !networkListenersAttached) {
       networkListenersAttached = true;
 
-      const handleOnline = () => {
+      const handleOnline = async () => {
         console.log('[Network Monitor] Connection restored. Replaying outbox mutations and syncing...');
         state.isOnline = true;
         notify();
-        restaurantStore.flushOutbox();
-        restaurantStore.syncFromDatabase();
+        try {
+          await restaurantStore.flushOutbox();
+        } catch (err) {
+          console.warn('[Network Monitor] Flush outbox warning:', err);
+        }
+        await restaurantStore.syncFromDatabase();
       };
 
       const handleOffline = () => {
@@ -1250,9 +1389,12 @@ export const restaurantStore = {
       window.addEventListener('offline', handleOffline);
 
       // Heartbeat periodic outbox queue retry (every 15 seconds)
-      setInterval(() => {
+      setInterval(async () => {
         if (typeof navigator !== 'undefined' && navigator.onLine && state.outboxQueue.length > 0 && !state.isSyncingOutbox) {
-          restaurantStore.flushOutbox();
+          const res = await restaurantStore.flushOutbox();
+          if (res.processed > 0 && state.outboxQueue.length === 0) {
+            await restaurantStore.syncFromDatabase();
+          }
         }
       }, 15000);
     }
@@ -1462,16 +1604,23 @@ export const restaurantStore = {
     let customer: Customer | undefined;
     if (orderData.customerId) {
       customer = state.customers.find((c) => c.id === orderData.customerId);
-    } else if (orderData.customerPhone && orderData.customerPhone.replace(/[\s-]/g, '').length >= 11) {
+    }
+    if (!customer && orderData.customerPhone) {
       const cleanPhone = orderData.customerPhone.trim();
-      const existing = state.customers.find((c) => c.phone.replace(/[\s-]/g, '') === cleanPhone.replace(/[\s-]/g, ''));
-      if (existing) {
-        customer = existing;
-      } else {
-        customer = restaurantStore.addCustomer({
-          name: orderData.customerName || `Guest ${cleanPhone.slice(-4)}`,
-          phone: cleanPhone,
+      const digits = cleanPhone.replace(/\D/g, '');
+      if (digits.length >= 10) {
+        const existing = state.customers.find((c) => {
+          const cDigits = c.phone.replace(/\D/g, '');
+          return cDigits.endsWith(digits) || digits.endsWith(cDigits) || cDigits === digits;
         });
+        if (existing) {
+          customer = existing;
+        } else {
+          customer = restaurantStore.addCustomer({
+            name: orderData.customerName || `Guest ${digits.slice(-4)}`,
+            phone: cleanPhone,
+          });
+        }
       }
     }
 
@@ -1553,6 +1702,7 @@ export const restaurantStore = {
     const { orderId, paymentMethod, payments } = params;
     const order = state.orders.find((o) => o.id === orderId);
     if (!order) return;
+    if (order.status === 'COMPLETED' && order.paymentStatus === 'PAID') return;
 
     const completedAt = new Date().toISOString();
     const finalPayments = payments || [{ method: paymentMethod, amount: order.totalAmount }];
