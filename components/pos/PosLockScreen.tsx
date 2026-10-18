@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Crown, Lock, Delete, ShieldAlert, CheckCircle2, User, KeyRound, Sparkles } from 'lucide-react';
+import { Crown, Lock, Delete, ShieldAlert, CheckCircle2, User } from 'lucide-react';
 import { StaffMember } from '@/types';
 import { getStaffMembers, authenticateWithPin, setActiveStaff } from '@/lib/pos-auth';
 
@@ -224,15 +224,6 @@ export function PosLockScreen({ onUnlock }: PosLockScreenProps) {
           >
             <Delete className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Quick Helper / Demo Credentials Footer */}
-        <div className="pt-2 text-center text-[10px] text-slate-500 font-mono space-y-0.5">
-          <p className="flex items-center justify-center gap-1 text-slate-400">
-            <KeyRound className="w-3 h-3 text-amber-400" />
-            <span>Default PINs: Tanvir (<strong>1234</strong>) • Aminul (<strong>2468</strong>) • Manager (<strong>9999</strong>)</span>
-          </p>
-          <p className="text-[9px] text-slate-600">Zero-Latency Offline Passcode Auth • Operates without Internet</p>
         </div>
       </div>
     </div>
