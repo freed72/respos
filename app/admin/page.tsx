@@ -1039,11 +1039,28 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="space-y-4 text-xs">
+                  {/* Auto-Print Toggle */}
+                  <div className="flex items-center justify-between p-4 bg-zinc-950 rounded-xl border border-zinc-800">
+                    <div>
+                      <h4 className="font-bold text-white text-xs">Auto-Print 80mm Receipt on Checkout</h4>
+                      <p className="text-zinc-400 text-[11px] mt-0.5">
+                        Automatically opens receipt print dialog when &apos;Process Transaction&apos; is clicked in POS.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.autoPrintReceipt !== false}
+                      onChange={(e) => updateSettings({ autoPrintReceipt: e.target.checked })}
+                      className="w-5 h-5 accent-amber-500 cursor-pointer rounded"
+                    />
+                  </div>
+
+                  {/* Auto-Kick Solenoid Toggle */}
                   <div className="flex items-center justify-between p-4 bg-zinc-950 rounded-xl border border-zinc-800">
                     <div>
                       <h4 className="font-bold text-white text-xs">Auto-Kick Solenoid on Cash Settlement</h4>
                       <p className="text-zinc-400 text-[11px] mt-0.5">
-                        Automatically opens cash drawer when cashier completes a cash invoice.
+                        Automatically pops open the cash drawer when completing a cash transaction.
                       </p>
                     </div>
                     <input
@@ -1052,6 +1069,23 @@ export default function AdminDashboardPage() {
                       onChange={(e) => updateSettings({ autoKickDrawerOnCash: e.target.checked })}
                       className="w-5 h-5 accent-amber-500 cursor-pointer rounded"
                     />
+                  </div>
+
+                  {/* Rongta RP335 + RT410B2 Hardware Architecture Note */}
+                  <div className="p-4 bg-amber-500/5 rounded-xl border border-amber-500/20 text-zinc-300 space-y-2">
+                    <div className="flex items-center gap-2 font-bold text-amber-400 text-xs">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>Rongta RP335 (USB) + RT410B2 (RJ11) Setup Guide</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-zinc-300">
+                      The Rongta RT410B2 cash drawer connects directly into the <strong>DK (Drawer Kick) RJ11/RJ12 port</strong> at the back of your Rongta RP335 thermal printer.
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1 text-[11px] text-zinc-400 font-medium">
+                      <li>In Windows: Go to <strong>Settings → Printers &amp; Scanners → Rongta RP335 → Printer Properties</strong>.</li>
+                      <li>Open the <strong>Device Settings</strong> tab.</li>
+                      <li>Set <strong>Cash Drawer #1</strong> to <span className="text-amber-300 font-semibold">&ldquo;Open Before Printing&rdquo;</span> or <span className="text-amber-300 font-semibold">&ldquo;Open After Printing&rdquo;</span>.</li>
+                      <li>For instant silent printing without print preview dialogs, launch Chrome with <code className="bg-zinc-800 text-amber-300 px-1 py-0.5 rounded text-[10px]">--kiosk-printing</code> flag.</li>
+                    </ol>
                   </div>
 
                   <div>
@@ -1069,13 +1103,20 @@ export default function AdminDashboardPage() {
                     </p>
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 grid grid-cols-2 gap-3">
                     <button
                       onClick={handleTestDrawer}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
+                      className="py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
                     >
                       <KeyRound className="w-4 h-4" />
-                      <span>Fire Test Solenoid (24V Pulse)</span>
+                      <span>Test Drawer Pulse</span>
+                    </button>
+                    <button
+                      onClick={() => window.print()}
+                      className="py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs flex items-center justify-center gap-2 border border-zinc-700 transition active:scale-95"
+                    >
+                      <Printer className="w-4 h-4 text-amber-400" />
+                      <span>Test Print Dialog</span>
                     </button>
                   </div>
                 </div>
@@ -1627,6 +1668,7 @@ export default function AdminDashboardPage() {
         <ThermalReceiptModal
           order={selectedReceiptOrder}
           settings={settings}
+          autoPrint={false}
           onClose={() => setSelectedReceiptOrder(null)}
           onKickDrawer={handleTestDrawer}
         />

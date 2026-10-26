@@ -12,6 +12,7 @@ interface ThermalReceiptModalProps {
   settings: SystemSettings;
   onClose: () => void;
   onKickDrawer?: () => void;
+  autoPrint?: boolean;
 }
 
 export function ThermalReceiptModal({
@@ -19,15 +20,40 @@ export function ThermalReceiptModal({
   settings,
   onClose,
   onKickDrawer,
+  autoPrint = true,
 }: ThermalReceiptModalProps) {
   const { customers } = useRestaurantStore();
   const matchedCustomer = customers.find(
     (c) => c.id === order.customerId || (order.customerPhone && c.phone.replace(/\D/g, '').endsWith(order.customerPhone.trim().replace(/\D/g, '')))
   );
 
+  const [isAutoPrintActive, setIsAutoPrintActive] = React.useState(autoPrint);
+
   const handlePrint = () => {
+    if (onKickDrawer) {
+      onKickDrawer();
+    }
     window.print();
   };
+
+  // Automatically trigger print job & drawer kick upon transaction settlement
+  React.useEffect(() => {
+    if (isAutoPrintActive) {
+      if (onKickDrawer) {
+        onKickDrawer();
+      }
+
+      const timer = setTimeout(() => {
+        try {
+          window.print();
+        } catch (err) {
+          console.error('Auto-print error:', err);
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -39,7 +65,22 @@ export function ThermalReceiptModal({
               80mm
             </div>
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Thermal Receipt Preview</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">Thermal Receipt Preview</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsAutoPrintActive(!isAutoPrintActive)}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border transition flex items-center gap-1 ${
+                    isAutoPrintActive
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : 'bg-slate-100 text-slate-500 border-slate-300'
+                  }`}
+                  title="Toggle automatic printing when transaction completes"
+                >
+                  <Printer className="w-3 h-3" />
+                  <span>Auto-Print: {isAutoPrintActive ? 'ON' : 'OFF'}</span>
+                </button>
+              </div>
               <p className="text-xs text-slate-500 font-mono">Order #{order.orderNumber}</p>
             </div>
           </div>

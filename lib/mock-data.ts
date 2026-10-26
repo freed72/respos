@@ -23,8 +23,9 @@ export const INITIAL_SETTINGS: SystemSettings = {
     GOLD: 35000,    // ৳35,000 spent to reach Gold
     ROYAL: 80000,   // ৳80,000 spent to reach Royal Ambassador
   },
-  printerType: 'WEB_SERIAL',
+  printerType: 'BROWSER_DIALOG',
   autoKickDrawerOnCash: true,
+  autoPrintReceipt: true,
   drawerKickCodeHex: '1B 70 00 19 FA',
   receiptFooterMessage: 'Thank you for gracing The Royal Palette! Visit again.',
 };

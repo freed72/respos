@@ -98,7 +98,7 @@ export async function triggerCashDrawer(params?: {
     window.dispatchEvent(event);
   }
 
-  // 2. Attempt Hardware Serial / USB connection if Web Serial is active
+  // 2. Attempt Hardware Serial connection if Web Serial is active and port is granted
   if (typeof navigator !== 'undefined' && 'serial' in navigator) {
     try {
       const serial = (navigator as unknown as { serial: { getPorts: () => Promise<unknown[]> } }).serial;
@@ -122,14 +122,83 @@ export async function triggerCashDrawer(params?: {
         };
       }
     } catch {
-      // Fallback gracefully to simulator if hardware is not physically paired
+      // Fallback gracefully to WebUSB or simulator
     }
   }
 
-  // 3. Fallback / Standard Virtual Simulation Mode
+  // 3. Attempt WebUSB connection if WebUSB is active and device has been granted
+  if (typeof navigator !== 'undefined' && 'usb' in navigator) {
+    try {
+      const usb = (navigator as unknown as { usb: { getDevices: () => Promise<unknown[]> } }).usb;
+      const devices = await usb.getDevices();
+      if (devices.length > 0) {
+        const device = devices[0] as {
+          open: () => Promise<void>;
+          selectConfiguration?: (c: number) => Promise<void>;
+          claimInterface?: (i: number) => Promise<void>;
+          transferOut?: (endpoint: number, data: BufferSource) => Promise<unknown>;
+          close: () => Promise<void>;
+        };
+        await device.open();
+        if (device.selectConfiguration) await device.selectConfiguration(1);
+        if (device.claimInterface) await device.claimInterface(0);
+        if (device.transferOut) {
+          // Send default ESC/POS drawer kick code to out endpoint
+          await device.transferOut(1, DEFAULT_DRAWER_KICK_BYTES);
+        }
+        await device.close();
+
+        return {
+          success: true,
+          method: 'WEB_USB',
+          message: 'ESC/POS Drawer Kick command transmitted over WebUSB to thermal printer.',
+        };
+      }
+    } catch {
+      // Fallback gracefully
+    }
+  }
+
+  // 4. Fallback / Standard Virtual Simulation Mode
   return {
     success: true,
     method: 'VIRTUAL_SIMULATOR',
     message: `Digital Cash Drawer Solenoid Energized [${reason}] (Simulated 24V Pulse on Pin 2).`,
   };
+}
+
+/**
+ * Pair a direct Web Serial port for POS Thermal Printers (e.g. COM / Virtual COM)
+ */
+export async function requestSerialPort(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !('serial' in navigator)) {
+    alert('Web Serial API is not supported in this browser. Please use Google Chrome or Edge.');
+    return false;
+  }
+  try {
+    const serial = (navigator as unknown as { serial: { requestPort: () => Promise<unknown> } }).serial;
+    await serial.requestPort();
+    return true;
+  } catch (err) {
+    console.warn('User cancelled or failed to select serial port:', err);
+    return false;
+  }
+}
+
+/**
+ * Pair a direct WebUSB device for POS Thermal Printers
+ */
+export async function requestUsbDevice(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !('usb' in navigator)) {
+    alert('WebUSB API is not supported in this browser. Please use Google Chrome or Edge.');
+    return false;
+  }
+  try {
+    const usb = (navigator as unknown as { usb: { requestDevice: (opt: { filters: unknown[] }) => Promise<unknown> } }).usb;
+    await usb.requestDevice({ filters: [] });
+    return true;
+  } catch (err) {
+    console.warn('User cancelled or failed to select USB device:', err);
+    return false;
+  }
 }

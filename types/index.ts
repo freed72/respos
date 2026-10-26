@@ -161,6 +161,7 @@ export interface SystemSettings {
   // Hardware settings:
   printerType: 'WEB_USB' | 'WEB_SERIAL' | 'BROWSER_DIALOG' | 'LOCAL_WS';
   autoKickDrawerOnCash: boolean;
+  autoPrintReceipt?: boolean;
   drawerKickCodeHex: string; // "1B 70 00 19 FA"
   receiptFooterMessage: string;
 }

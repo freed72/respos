@@ -1683,7 +1683,8 @@ export const restaurantStore = {
       restaurantStore.updateCustomerPoints(newOrder.customerId, netPointsChange, newOrder.totalAmount);
     }
 
-    if (status === 'COMPLETED' && newOrder.paymentMethod === 'CASH' && state.settings.autoKickDrawerOnCash) {
+    const hasCash = newOrder.paymentMethod === 'CASH' || newOrder.payments?.some((p) => p.method === 'CASH');
+    if (status === 'COMPLETED' && hasCash && state.settings.autoKickDrawerOnCash) {
       restaurantStore.kickDrawer(`Settled Order #${newOrder.orderNumber}`, newOrder.orderNumber, newOrder.totalAmount);
     }
 

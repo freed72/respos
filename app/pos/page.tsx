@@ -1416,6 +1416,7 @@ export default function POSPage() {
         <ThermalReceiptModal
           order={completedOrderForReceipt}
           settings={settings}
+          autoPrint={settings.autoPrintReceipt !== false}
           onClose={() => setCompletedOrderForReceipt(null)}
           onKickDrawer={handleManualKickDrawer}
         />
