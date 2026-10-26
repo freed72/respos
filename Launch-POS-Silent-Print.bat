@@ -9,24 +9,29 @@ echo Printing dialogs are bypassed automatically.
 echo Receipts will print silently to your default printer (Rongta RP335).
 echo.
 
+set TARGET_PORT=3002
+if not "%~1"=="" set TARGET_PORT=%~1
+
+set POS_URL=http://localhost:%TARGET_PORT%/pos
+
 set CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
 set CHROME_PATH_X86="C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 set EDGE_PATH="C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 
 if exist %CHROME_PATH% (
-    start "" %CHROME_PATH% --kiosk-printing --app=http://localhost:3002/pos
+    start "" %CHROME_PATH% --kiosk-printing --app=%POS_URL%
     exit
 )
 
 if exist %CHROME_PATH_X86% (
-    start "" %CHROME_PATH_X86% --kiosk-printing --app=http://localhost:3002/pos
+    start "" %CHROME_PATH_X86% --kiosk-printing --app=%POS_URL%
     exit
 )
 
 if exist %EDGE_PATH% (
-    start "" %EDGE_PATH% --kiosk-printing --app=http://localhost:3002/pos
+    start "" %EDGE_PATH% --kiosk-printing --app=%POS_URL%
     exit
 )
 
 echo Browser not found in standard paths. Opening default browser...
-start http://localhost:3002/pos
+start %POS_URL%
