@@ -55,6 +55,19 @@ export function ThermalReceiptModal({
     }
   }, []);
 
+  // Auto-close receipt modal once printing finishes (or in silent kiosk mode)
+  React.useEffect(() => {
+    const handleAfterPrint = () => {
+      const closeTimer = setTimeout(() => {
+        onClose();
+      }, 500);
+      return () => clearTimeout(closeTimer);
+    };
+
+    window.addEventListener('afterprint', handleAfterPrint);
+    return () => window.removeEventListener('afterprint', handleAfterPrint);
+  }, [onClose]);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
