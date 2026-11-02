@@ -222,6 +222,24 @@ interface DbDrawerLog {
   timestamp: string;
 }
 
+interface DbSystemSettings {
+  id: string;
+  restaurant_name: string | null;
+  tagline: string | null;
+  currency: string | null;
+  currency_code: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  bin_number: string | null;
+  vat_percent: number | string | null;
+  service_charge_percent: number | string | null;
+  auto_kick_drawer_on_cash: boolean | null;
+  drawer_kick_code_hex: string | null;
+  receipt_footer_message: string | null;
+  updated_at?: string;
+}
+
 function mapDbProduct(p: DbProduct): Product {
   return {
     id: p.id,
@@ -420,7 +438,13 @@ function loadFromStorage() {
     if (m) state.customers = JSON.parse(m);
     if (o) state.orders = JSON.parse(o);
     else state.orders = [];
-    if (s) state.settings = JSON.parse(s);
+    if (s) {
+      try {
+        state.settings = { ...INITIAL_SETTINGS, ...JSON.parse(s) };
+      } catch {
+        state.settings = INITIAL_SETTINGS;
+      }
+    }
     if (d) state.drawerLogs = JSON.parse(d);
     if (q) state.outboxQueue = JSON.parse(q);
     if (e) state.expenses = JSON.parse(e);
@@ -933,7 +957,10 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'UPDATE_SETTINGS': {
       const settings = payload as Partial<SystemSettings>;
-      const dbSettings: Record<string, unknown> = {};
+      const dbSettings: Record<string, unknown> = {
+        id: 'GLOBAL_CONFIG',
+        updated_at: new Date().toISOString(),
+      };
       if (settings.restaurantName !== undefined) dbSettings.restaurant_name = settings.restaurantName;
       if (settings.tagline !== undefined) dbSettings.tagline = settings.tagline;
       if (settings.currency !== undefined) dbSettings.currency = settings.currency;
@@ -948,10 +975,8 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (settings.drawerKickCodeHex !== undefined) dbSettings.drawer_kick_code_hex = settings.drawerKickCodeHex;
       if (settings.receiptFooterMessage !== undefined) dbSettings.receipt_footer_message = settings.receiptFooterMessage;
 
-      if (Object.keys(dbSettings).length > 0) {
-        const { error } = await insforge.database.from('system_settings').update(dbSettings).eq('id', 'GLOBAL_CONFIG');
-        if (error) throw new Error(error.message || 'Error updating settings');
-      }
+      const { error } = await insforge.database.from('system_settings').upsert([dbSettings]);
+      if (error) throw new Error(error.message || 'Error updating settings');
       break;
     }
   }
@@ -1277,6 +1302,7 @@ async function syncFromDatabase() {
       { data: ordersData },
       { data: orderItemsData },
       { data: drawerLogsData },
+      { data: settingsData },
     ] = await Promise.all([
       insforge.database.from('categories').select(),
       insforge.database.from('products').select(),
@@ -1285,6 +1311,7 @@ async function syncFromDatabase() {
       insforge.database.from('orders').select().order('created_at', { ascending: false }),
       insforge.database.from('order_items').select(),
       insforge.database.from('drawer_logs').select().order('timestamp', { ascending: false }).limit(50),
+      insforge.database.from('system_settings').select().eq('id', 'GLOBAL_CONFIG').maybeSingle(),
     ]);
 
     state.isOnline = true;
@@ -1404,6 +1431,29 @@ async function syncFromDatabase() {
       }));
     }
 
+    if (settingsData) {
+      const sData = settingsData as DbSystemSettings;
+      const hasPendingSettings = state.outboxQueue.some((it) => it.type === 'UPDATE_SETTINGS');
+      if (!hasPendingSettings) {
+        state.settings = {
+          ...state.settings,
+          restaurantName: sData.restaurant_name ?? state.settings.restaurantName,
+          tagline: sData.tagline ?? state.settings.tagline,
+          currency: sData.currency ?? state.settings.currency,
+          currencyCode: sData.currency_code ?? state.settings.currencyCode,
+          address: sData.address ?? state.settings.address,
+          phone: sData.phone ?? state.settings.phone,
+          email: sData.email ?? state.settings.email,
+          binNumber: sData.bin_number ?? state.settings.binNumber,
+          vatPercent: sData.vat_percent !== null && sData.vat_percent !== undefined ? Number(sData.vat_percent) : state.settings.vatPercent,
+          serviceChargePercent: sData.service_charge_percent !== null && sData.service_charge_percent !== undefined ? Number(sData.service_charge_percent) : state.settings.serviceChargePercent,
+          autoKickDrawerOnCash: sData.auto_kick_drawer_on_cash ?? state.settings.autoKickDrawerOnCash,
+          drawerKickCodeHex: sData.drawer_kick_code_hex ?? state.settings.drawerKickCodeHex,
+          receiptFooterMessage: sData.receipt_footer_message ?? state.settings.receiptFooterMessage,
+        };
+      }
+    }
+
     saveToStorage();
     notify();
   } catch (err) {
@@ -1519,6 +1569,18 @@ export const restaurantStore = {
             } catch (e) {
               // ignore
             }
+          } else if (action === 'SETTINGS_UPDATED') {
+            try {
+              const stored = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+              if (stored) {
+                state.settings = { ...INITIAL_SETTINGS, ...JSON.parse(stored) };
+              } else if (event.data?.data) {
+                state.settings = { ...INITIAL_SETTINGS, ...event.data.data };
+              }
+              notify();
+            } catch (e) {
+              // ignore
+            }
           }
         };
       }
@@ -1537,7 +1599,7 @@ export const restaurantStore = {
             state.customers = event.newValue ? JSON.parse(event.newValue) : [];
             notify();
           } else if (event.key === STORAGE_KEYS.SETTINGS) {
-            state.settings = event.newValue ? JSON.parse(event.newValue) : state.settings;
+            state.settings = event.newValue ? { ...INITIAL_SETTINGS, ...JSON.parse(event.newValue) } : state.settings;
             notify();
           } else if (event.key === STORAGE_KEYS.OUTBOX) {
             state.outboxQueue = event.newValue ? JSON.parse(event.newValue) : [];
@@ -1767,6 +1829,8 @@ export const restaurantStore = {
     customerPhone?: string;
     items: OrderItem[];
     discountAmount?: number;
+    taxAmount?: number;
+    serviceChargeAmount?: number;
     tipAmount?: number;
     notes?: string;
     pointsToRedeem?: number;
@@ -1776,16 +1840,21 @@ export const restaurantStore = {
     serverName?: string;
   }): Order {
     const subtotal = orderData.items.reduce((sum, item) => sum + item.totalPrice, 0);
-    const taxAmount = 0;
-    const isDineIn = orderData.orderType === 'DINE_IN';
-    const serviceChargeAmount = 0;
     const discountAmount = orderData.discountAmount || 0;
+    const afterDiscount = Math.max(0, subtotal - discountAmount);
+    const isDineIn = orderData.orderType === 'DINE_IN';
+    const taxAmount = orderData.taxAmount !== undefined
+      ? orderData.taxAmount
+      : (afterDiscount * (state.settings.vatPercent || 0)) / 100;
+    const serviceChargeAmount = orderData.serviceChargeAmount !== undefined
+      ? orderData.serviceChargeAmount
+      : (isDineIn ? (afterDiscount * (state.settings.serviceChargePercent || 0)) / 100 : 0);
     const pointsToRedeem = orderData.pointsToRedeem || 0;
     const pointsDiscountValue = pointsToRedeem * state.settings.loyaltyRedemptionRate;
 
     const totalAmount = Math.max(
       0,
-      subtotal + (orderData.tipAmount || 0) - discountAmount - pointsDiscountValue
+      afterDiscount + taxAmount + serviceChargeAmount + (orderData.tipAmount || 0) - pointsDiscountValue
     );
 
     let customer: Customer | undefined;
@@ -1982,6 +2051,7 @@ export const restaurantStore = {
     state.settings = { ...state.settings, ...newSettings };
     saveToStorage();
     notify();
+    broadcastSync('SETTINGS_UPDATED', state.settings);
 
     dbUpdateSettings(newSettings);
   },
@@ -2172,9 +2242,10 @@ export function useRestaurantStore() {
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    restaurantStore.init();
     const listener = () => setTick((t) => t + 1);
     listeners.add(listener);
+    restaurantStore.init();
+    setTick((t) => t + 1);
     return () => {
       listeners.delete(listener);
     };

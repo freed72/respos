@@ -107,11 +107,15 @@ export function ThermalReceiptModal({
           >
             {/* Header */}
             <div className="text-center pb-3 border-b border-dashed border-black">
-              <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-black">{settings.restaurantName}</h1>
-              <p className="text-[10px] text-black italic break-words">{settings.tagline}</p>
-              <p className="text-[10px] text-black mt-1 break-words">{settings.address}</p>
-              <p className="text-[10px] text-black">Phone: {settings.phone}</p>
-              <p className="text-[10px] font-bold text-black mt-0.5">BIN / VAT Reg: {settings.binNumber}</p>
+              <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-black">
+                {settings?.restaurantName || 'The Royal Palette'}
+              </h1>
+              {settings?.tagline && <p className="text-[10px] text-black italic break-words">{settings.tagline}</p>}
+              {settings?.address && <p className="text-[10px] text-black mt-1 break-words">{settings.address}</p>}
+              {settings?.phone && <p className="text-[10px] text-black">Phone: {settings.phone}</p>}
+              {settings?.binNumber && (
+                <p className="text-[10px] font-bold text-black mt-0.5">BIN / VAT Reg: {settings.binNumber}</p>
+              )}
             </div>
 
             {/* Order Meta */}
@@ -180,13 +184,15 @@ export function ThermalReceiptModal({
                   <span className="shrink-0">- {formatBDT(order.pointsDiscountValue)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center">
-                <span>VAT ({settings.vatPercent}%):</span>
-                <span className="shrink-0">{formatBDT(order.taxAmount)}</span>
-              </div>
-              {order.serviceChargeAmount > 0 && (
+              {((settings?.vatPercent ?? 0) > 0 || order.taxAmount > 0) && (
                 <div className="flex justify-between items-center">
-                  <span>Service Charge ({settings.serviceChargePercent}%):</span>
+                  <span>VAT ({settings?.vatPercent ?? 0}%):</span>
+                  <span className="shrink-0">{formatBDT(order.taxAmount)}</span>
+                </div>
+              )}
+              {((settings?.serviceChargePercent ?? 0) > 0 || order.serviceChargeAmount > 0) && (
+                <div className="flex justify-between items-center">
+                  <span>Service Charge ({settings?.serviceChargePercent ?? 0}%):</span>
                   <span className="shrink-0">{formatBDT(order.serviceChargeAmount)}</span>
                 </div>
               )}
@@ -216,7 +222,9 @@ export function ThermalReceiptModal({
 
             {/* Footer */}
             <div className="pt-3 text-center flex flex-col items-center space-y-1 text-black">
-              <p className="text-[9px] font-bold text-black break-words">{settings.receiptFooterMessage}</p>
+              <p className="text-[9px] font-bold text-black break-words">
+                {settings?.receiptFooterMessage || 'Thank you for gracing The Royal Palette! Visit again.'}
+              </p>
               <div className="text-[8px] text-black leading-tight text-center pt-0.5">
                 <p>Software Powered by eypo technologies</p>
                 <p>www.airocky.me</p>

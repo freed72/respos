@@ -266,10 +266,10 @@ export default function POSPage() {
   // Financial Calculations
   const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const discountAmount = (subtotal * discountPercent) / 100;
-  const taxAmount = 0;
-  const isDineIn = orderType === 'DINE_IN';
-  const serviceChargeAmount = 0;
   const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const isDineIn = orderType === 'DINE_IN';
+  const taxAmount = (afterDiscount * (settings.vatPercent || 0)) / 100;
+  const serviceChargeAmount = isDineIn ? (afterDiscount * (settings.serviceChargePercent || 0)) / 100 : 0;
   const maxRedeemablePoints = Math.min(
     availableCustomerPoints,
     Math.floor(afterDiscount / (settings.loyaltyRedemptionRate || 1))
@@ -278,7 +278,7 @@ export default function POSPage() {
 
   const totalPayable = Math.max(
     0,
-    subtotal - discountAmount - pointsDiscountValue
+    afterDiscount + taxAmount + serviceChargeAmount - pointsDiscountValue
   );
 
   const changeDue = Math.max(0, cashTendered - totalPayable);
@@ -331,6 +331,8 @@ export default function POSPage() {
         customerPhone: activeCustomerPhone || (cleanedDigits.length >= 10 ? trimmedInput : undefined),
         items: cartItems,
         discountAmount,
+        taxAmount,
+        serviceChargeAmount,
         pointsToRedeem,
         status: 'COMPLETED',
         paymentStatus: 'PAID',

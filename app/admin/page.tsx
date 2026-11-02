@@ -411,6 +411,7 @@ export default function AdminDashboardPage() {
     binNumber: settings.binNumber || '',
     vatPercent: settings.vatPercent ?? 0,
     serviceChargePercent: settings.serviceChargePercent ?? 0,
+    receiptFooterMessage: settings.receiptFooterMessage || '',
   });
   const [isSavingStoreProfile, setIsSavingStoreProfile] = useState(false);
   const [storeProfileSuccess, setStoreProfileSuccess] = useState(false);
@@ -424,6 +425,7 @@ export default function AdminDashboardPage() {
       binNumber: settings.binNumber || '',
       vatPercent: settings.vatPercent ?? 0,
       serviceChargePercent: settings.serviceChargePercent ?? 0,
+      receiptFooterMessage: settings.receiptFooterMessage || '',
     });
   }, [
     settings.restaurantName,
@@ -433,6 +435,7 @@ export default function AdminDashboardPage() {
     settings.binNumber,
     settings.vatPercent,
     settings.serviceChargePercent,
+    settings.receiptFooterMessage,
   ]);
 
   const handleSaveStoreProfile = async (e?: React.FormEvent) => {
@@ -3018,6 +3021,21 @@ export default function AdminDashboardPage() {
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white font-mono focus:outline-none focus:border-zinc-700"
                       />
                     </div>
+                  </div>
+
+                  {/* Row 3: Receipt Footer Message */}
+                  <div>
+                    <label className="text-zinc-300 font-bold block mb-1">Receipt Footer Salutation / Greeting</label>
+                    <input
+                      type="text"
+                      value={storeProfileForm.receiptFooterMessage}
+                      onChange={(e) => setStoreProfileForm({ ...storeProfileForm, receiptFooterMessage: e.target.value })}
+                      placeholder="e.g. Thank you for dining with us! Visit again."
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-zinc-700"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Printed at the bottom of customer 80mm thermal bills and invoices.
+                    </p>
                   </div>
 
                   {/* Save Button for Store Profile & NBR Tax Configurations */}
