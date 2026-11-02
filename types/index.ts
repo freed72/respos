@@ -153,6 +153,7 @@ export interface SystemSettings {
     ROYAL: number; // e.g. 3 pt per ৳100
   };
   loyaltyRedemptionRate: number; // 1 point = ৳1 BDT discount
+  welcomeBonusPoints?: number; // e.g. 50 points on registration
   tierSpendThresholds: {
     SILVER: number; // ৳10,000
     GOLD: number; // ৳30,000
@@ -171,5 +172,16 @@ export interface StaffMember {
   name: string;
   role: 'MANAGER' | 'CASHIER' | 'SERVER';
   pin: string;
+}
+
+export interface ExpenseRecord {
+  id: string;
+  title: string;
+  amount: number;
+  category: string;
+  paymentMethod: 'CASH' | 'BKASH' | 'NAGAD' | 'BANK';
+  notes?: string;
+  recordedBy?: string;
+  createdAt: string;
 }
 

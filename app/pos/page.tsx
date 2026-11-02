@@ -27,6 +27,7 @@ import {
   Moon,
   Lock,
   User,
+  FileText,
 } from 'lucide-react';
 import { useRestaurantStore } from '@/lib/store';
 import { Order, OrderItem, PaymentMethod, Product, Table, StaffMember } from '@/types';
@@ -42,6 +43,8 @@ export default function POSPage() {
     categories,
     tables,
     customers,
+    orders,
+    drawerLogs,
     addCustomer,
     createOrder,
     settleOrder,
@@ -480,6 +483,20 @@ export default function POSPage() {
                   <span className="text-[10px] font-mono text-neutral-400 font-normal">({activeStaff.role})</span>
                 </div>
               )}
+
+              {/* Daily Sales Report Button */}
+              <Link
+                href="/pos/daily-report"
+                title="Open Daily Sales Report Page"
+                className={`h-10 px-3 rounded-lg border flex items-center gap-1.5 transition text-xs font-bold shrink-0 cursor-pointer ${
+                  isDarkMode
+                    ? 'border-amber-500/40 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 active:scale-95'
+                    : 'border-amber-500/40 text-amber-900 bg-amber-50 hover:bg-amber-100 active:scale-95'
+                }`}
+              >
+                <FileText className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="hidden sm:inline">Daily Report</span>
+              </Link>
 
               {/* Lock Terminal Button */}
               <button

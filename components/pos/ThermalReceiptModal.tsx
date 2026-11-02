@@ -3,9 +3,7 @@
 import React from 'react';
 import { Order, SystemSettings } from '@/types';
 import { formatBDT, formatDateTime } from '@/lib/formatters';
-import { Printer, KeyRound, X, CheckCircle, Sparkles } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import { useRestaurantStore } from '@/lib/store';
+import { Printer, KeyRound, X } from 'lucide-react';
 
 interface ThermalReceiptModalProps {
   order: Order;
@@ -22,11 +20,6 @@ export function ThermalReceiptModal({
   onKickDrawer,
   autoPrint = true,
 }: ThermalReceiptModalProps) {
-  const { customers } = useRestaurantStore();
-  const matchedCustomer = customers.find(
-    (c) => c.id === order.customerId || (order.customerPhone && c.phone.replace(/\D/g, '').endsWith(order.customerPhone.trim().replace(/\D/g, '')))
-  );
-
   const [isAutoPrintActive, setIsAutoPrintActive] = React.useState(autoPrint);
 
   const handlePrint = () => {
@@ -69,10 +62,10 @@ export function ThermalReceiptModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div className="thermal-receipt-modal-backdrop fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Top Control Bar */}
-        <div className="p-4 bg-[#f8f8f8] border-b border-slate-200 flex items-center justify-between">
+        <div className="print:hidden p-4 bg-[#f8f8f8] border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-md bg-[#000f50]/10 text-[#000f50] flex items-center justify-center font-bold text-xs">
               80mm
@@ -109,57 +102,58 @@ export function ThermalReceiptModal({
         <div className="p-6 overflow-y-auto flex-1 bg-slate-100 flex justify-center">
           <div
             id="thermal-receipt"
-            className="w-full max-w-[340px] bg-white text-black p-5 rounded-md shadow-md font-mono text-[12px] leading-relaxed select-text border border-slate-200"
+            className="w-full max-w-[320px] bg-white text-black px-6 py-5 rounded-md shadow-md font-sans text-[11px] leading-relaxed select-text border border-slate-200 box-border overflow-hidden"
+            style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
           >
             {/* Header */}
-            <div className="text-center pb-3 border-b border-dashed border-gray-400">
-              <h1 className="text-lg font-black tracking-wider uppercase">{settings.restaurantName}</h1>
-              <p className="text-[10px] text-gray-700 italic">{settings.tagline}</p>
-              <p className="text-[10px] text-gray-700 mt-1">{settings.address}</p>
-              <p className="text-[10px] text-gray-700">Phone: {settings.phone}</p>
-              <p className="text-[10px] font-bold text-gray-900 mt-0.5">BIN / VAT Reg: {settings.binNumber}</p>
+            <div className="text-center pb-3 border-b border-dashed border-black">
+              <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-black">{settings.restaurantName}</h1>
+              <p className="text-[10px] text-black italic break-words">{settings.tagline}</p>
+              <p className="text-[10px] text-black mt-1 break-words">{settings.address}</p>
+              <p className="text-[10px] text-black">Phone: {settings.phone}</p>
+              <p className="text-[10px] font-bold text-black mt-0.5">BIN / VAT Reg: {settings.binNumber}</p>
             </div>
 
             {/* Order Meta */}
-            <div className="py-2.5 border-b border-dashed border-gray-400 text-[11px] space-y-0.5">
-              <div className="flex justify-between">
+            <div className="py-2.5 border-b border-dashed border-black text-[11px] space-y-0.5 text-black">
+              <div className="flex justify-between items-center gap-1">
                 <span>Order No: <strong>{order.orderNumber}</strong></span>
-                <span>Type: <strong>{order.orderType.replace('_', ' ')}</strong></span>
+                <span className="shrink-0 text-right">Type: <strong>{order.orderType.replace('_', ' ')}</strong></span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-start gap-1">
                 <span>Date: {formatDateTime(order.createdAt)}</span>
-                <span>Cashier: <strong>{order.serverName || 'Counter Staff'}</strong></span>
+                <span className="shrink-0 text-right">Cashier: <strong>{order.serverName || 'Counter Staff'}</strong></span>
               </div>
               {order.tableNumber && (
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>Table: <strong>{order.tableNumber}</strong></span>
                 </div>
               )}
               {order.customerName && (
-                <div className="flex justify-between text-gray-800">
-                  <span>Guest: {order.customerName}</span>
-                  {order.customerPhone && <span>({order.customerPhone})</span>}
+                <div className="flex justify-between items-start gap-1 text-black">
+                  <span className="break-words">Guest: {order.customerName}</span>
+                  {order.customerPhone && <span className="shrink-0 font-sans">({order.customerPhone})</span>}
                 </div>
               )}
             </div>
 
             {/* Itemized Table */}
-            <div className="py-2.5 border-b border-dashed border-gray-400">
-              <div className="flex justify-between font-bold pb-1 text-[11px] border-b border-gray-200">
+            <div className="py-2.5 border-b border-dashed border-black text-black">
+              <div className="flex justify-between font-bold pb-1 text-[11px] border-b border-black">
                 <span className="w-1/2">Item Description</span>
                 <span className="w-1/6 text-center">Qty</span>
                 <span className="w-1/3 text-right">Amount</span>
               </div>
-              <div className="divide-y divide-gray-100 py-1 space-y-1">
+              <div className="divide-y divide-gray-200 py-1 space-y-1">
                 {order.items.map((item) => (
                   <div key={item.id} className="pt-1">
-                    <div className="flex justify-between">
-                      <span className="w-1/2 font-medium">{item.productName}</span>
-                      <span className="w-1/6 text-center">{item.quantity}</span>
-                      <span className="w-1/3 text-right">{formatBDT(item.totalPrice)}</span>
+                    <div className="flex justify-between items-start">
+                      <span className="w-1/2 font-medium break-words pr-1 text-black">{item.productName}</span>
+                      <span className="w-1/6 text-center shrink-0 text-black">{item.quantity}</span>
+                      <span className="w-1/3 text-right shrink-0 text-black">{formatBDT(item.totalPrice)}</span>
                     </div>
                     {item.selectedModifiers && item.selectedModifiers.length > 0 && (
-                      <div className="text-[10px] text-gray-600 pl-2">
+                      <div className="text-[10px] text-black pl-2 break-words">
                         {item.selectedModifiers.map((m) => `+ ${m.optionName}`).join(', ')}
                       </div>
                     )}
@@ -169,103 +163,70 @@ export function ThermalReceiptModal({
             </div>
 
             {/* Calculations & Totals */}
-            <div className="py-2.5 border-b border-dashed border-gray-400 text-[11px] space-y-1">
-              <div className="flex justify-between">
+            <div className="py-2.5 border-b border-dashed border-black text-[11px] space-y-1 text-black">
+              <div className="flex justify-between items-center">
                 <span>Subtotal:</span>
-                <span>{formatBDT(order.subtotal)}</span>
+                <span className="shrink-0 font-medium">{formatBDT(order.subtotal)}</span>
               </div>
               {order.discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-800">
+                <div className="flex justify-between items-center text-black">
                   <span>Special Discount:</span>
-                  <span>- {formatBDT(order.discountAmount)}</span>
+                  <span className="shrink-0">- {formatBDT(order.discountAmount)}</span>
                 </div>
               )}
               {order.pointsDiscountValue > 0 && (
-                <div className="flex justify-between text-indigo-800">
+                <div className="flex justify-between items-center text-black">
                   <span>Loyalty Points Discount ({order.pointsRedeemed} pts):</span>
-                  <span>- {formatBDT(order.pointsDiscountValue)}</span>
+                  <span className="shrink-0">- {formatBDT(order.pointsDiscountValue)}</span>
                 </div>
               )}
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span>VAT ({settings.vatPercent}%):</span>
-                <span>{formatBDT(order.taxAmount)}</span>
+                <span className="shrink-0">{formatBDT(order.taxAmount)}</span>
               </div>
               {order.serviceChargeAmount > 0 && (
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>Service Charge ({settings.serviceChargePercent}%):</span>
-                  <span>{formatBDT(order.serviceChargeAmount)}</span>
+                  <span className="shrink-0">{formatBDT(order.serviceChargeAmount)}</span>
                 </div>
               )}
               {order.tipAmount > 0 && (
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>Staff Gratuity:</span>
-                  <span>{formatBDT(order.tipAmount)}</span>
+                  <span className="shrink-0">{formatBDT(order.tipAmount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-sm font-black pt-1.5 border-t border-gray-400">
+              <div className="flex justify-between items-center text-sm font-black pt-1.5 border-t border-black">
                 <span>TOTAL PAYABLE:</span>
-                <span>{formatBDT(order.totalAmount)}</span>
+                <span className="shrink-0">{formatBDT(order.totalAmount)}</span>
               </div>
             </div>
 
             {/* Payment Method Details */}
-            <div className="py-2 border-b border-dashed border-gray-400 text-[11px]">
-              <div className="flex justify-between font-bold">
+            <div className="py-2 border-b border-dashed border-black text-[11px] text-black">
+              <div className="flex justify-between items-center font-bold">
                 <span>Payment Method:</span>
-                <span className="uppercase">{order.paymentMethod || 'CASH'}</span>
+                <span className="uppercase shrink-0">{order.paymentMethod || 'CASH'}</span>
               </div>
-              <div className="flex justify-between text-gray-700">
+              <div className="flex justify-between items-center text-black">
                 <span>Payment Status:</span>
-                <span className="text-emerald-700 font-bold">{order.paymentStatus}</span>
+                <span className="font-bold shrink-0">{order.paymentStatus}</span>
               </div>
             </div>
 
-            {/* Loyalty Rewards on this visit */}
-            {(order.pointsEarned > 0 || (order.pointsRedeemed && order.pointsRedeemed > 0) || matchedCustomer) && (
-              <div className="py-2.5 border-b border-dashed border-gray-400 text-center bg-gray-50 rounded my-1.5 p-2 space-y-1">
-                <div className="text-[10px] font-bold text-indigo-900 uppercase flex items-center justify-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-500" /> Royal Rewards Summary
-                </div>
-                {order.pointsEarned > 0 && (
-                  <div className="text-xs font-black text-emerald-800">
-                    +{order.pointsEarned} Points Added to Wallet
-                  </div>
-                )}
-                {order.pointsRedeemed !== undefined && order.pointsRedeemed > 0 && (
-                  <div className="text-xs font-bold text-amber-700">
-                    -{order.pointsRedeemed} Points Redeemed (-{formatBDT(order.pointsDiscountValue)})
-                  </div>
-                )}
-                {matchedCustomer && (
-                  <div className="text-[10px] font-bold font-mono text-indigo-950 pt-1 border-t border-gray-200 flex justify-between px-1">
-                    <span>VIP Member: {matchedCustomer.name}</span>
-                    <span>Balance: {matchedCustomer.pointsBalance} PTS</span>
-                  </div>
-                )}
-                <div className="text-[9px] text-gray-600">
-                  Redeem 1 Pt = ৳1 BDT on your next banquet
-                </div>
+            {/* Footer */}
+            <div className="pt-3 text-center flex flex-col items-center space-y-1 text-black">
+              <p className="text-[9px] font-bold text-black break-words">{settings.receiptFooterMessage}</p>
+              <div className="text-[8px] text-black leading-tight text-center pt-0.5">
+                <p>Software Powered by eypo technologies</p>
+                <p>www.airocky.me</p>
               </div>
-            )}
-
-            {/* QR Code & Footer */}
-            <div className="pt-3 text-center flex flex-col items-center">
-              <div className="p-1 bg-white border border-gray-300 rounded">
-                <QRCodeSVG
-                  value={`https://royalpalette.com.bd/rewards?order=${order.orderNumber}`}
-                  size={64}
-                  level="M"
-                />
-              </div>
-              <p className="text-[9px] text-gray-600 mt-1">Scan to check your Royal Points balance</p>
-              <p className="text-[10px] font-bold text-gray-800 mt-2">{settings.receiptFooterMessage}</p>
-              <p className="text-[9px] text-gray-500 mt-0.5">Software Powered by Next.js & Insforge</p>
             </div>
           </div>
         </div>
 
         {/* Modal Bottom Action Controls */}
-        <div className="p-4 bg-[#f8f8f8] border-t border-slate-200 flex flex-wrap gap-2.5 justify-end">
+        <div className="print:hidden p-4 bg-[#f8f8f8] border-t border-slate-200 flex flex-wrap gap-2.5 justify-end">
           {onKickDrawer && (
             <button
               onClick={onKickDrawer}

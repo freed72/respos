@@ -18,6 +18,7 @@ export const INITIAL_SETTINGS: SystemSettings = {
     ROYAL: 3,       // 3 points per ৳100 spent
   },
   loyaltyRedemptionRate: 1, // 1 point = ৳1 discount
+  welcomeBonusPoints: 50,  // 50 welcome points (৳50 value)
   tierSpendThresholds: {
     SILVER: 10000,  // ৳10,000 spent to reach Silver
     GOLD: 35000,    // ৳35,000 spent to reach Gold

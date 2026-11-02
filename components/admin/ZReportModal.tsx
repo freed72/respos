@@ -28,6 +28,7 @@ interface ZReportModalProps {
   settings: SystemSettings;
   drawerLogsCount: number;
   onClose: () => void;
+  cashierName?: string;
 }
 
 type DateFilterType = 'TODAY' | 'YESTERDAY' | 'CUSTOM' | 'ALL';
@@ -38,6 +39,7 @@ export const ZReportModal: React.FC<ZReportModalProps> = ({
   settings,
   drawerLogsCount,
   onClose,
+  cashierName,
 }) => {
   const [dateFilter, setDateFilter] = useState<DateFilterType>('TODAY');
   const [printFormat, setPrintFormat] = useState<PrintFormatType>('THERMAL_80MM');
@@ -343,7 +345,8 @@ Status: NBR Mushak-6.3 Certified Closeout`;
             {/* The Authentic Thermal Paper Slip (id="printable-z-report") */}
             <div
               id="printable-z-report"
-              className={`w-full bg-white text-neutral-900 shadow-2xl font-mono text-[11px] leading-relaxed select-text border border-neutral-300 relative rounded-sm transition-all duration-200 my-auto ${
+              style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+              className={`w-full bg-white text-black shadow-2xl text-[11px] leading-relaxed select-text border border-neutral-300 relative rounded-sm transition-all duration-200 my-auto ${
                 printFormat === 'A4_SHEET'
                   ? 'max-w-[580px] p-8 text-[12px] print-format-a4'
                   : 'max-w-[360px] p-5'
@@ -392,6 +395,12 @@ Status: NBR Mushak-6.3 Certified Closeout`;
                   <span>POS Terminal:</span>
                   <span>COUNTER-01 (Offline-First POS)</span>
                 </div>
+                {cashierName && (
+                  <div className="flex justify-between">
+                    <span>Active Cashier:</span>
+                    <span className="font-bold">{cashierName}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span>Cash Drawer Pulses:</span>
                   <span><strong>{drawerLogsCount}</strong> cycles</span>
@@ -559,7 +568,7 @@ Status: NBR Mushak-6.3 Certified Closeout`;
               <div className="pt-3 pb-2 text-[10px] space-y-6">
                 <div className="grid grid-cols-2 gap-6 text-center">
                   <div className="border-t border-black pt-1 mt-6">
-                    <p className="font-bold">Chief Cashier</p>
+                    <p className="font-bold">{cashierName || 'Chief Cashier'}</p>
                     <p className="text-[9px] text-neutral-600">Physical Till Count & Sign</p>
                   </div>
                   <div className="border-t border-black pt-1 mt-6">

@@ -14,6 +14,7 @@ import {
   SystemSettings,
   Table,
   TableStatus,
+  ExpenseRecord,
 } from '@/types';
 import {
   INITIAL_CATEGORIES,
@@ -38,6 +39,8 @@ export type OutboxActionType =
   | 'DELETE_TABLE'
   | 'INSERT_CUSTOMER'
   | 'UPDATE_CUSTOMER'
+  | 'UPDATE_CUSTOMER_FULL'
+  | 'DELETE_CUSTOMER'
   | 'INSERT_ORDER'
   | 'SETTLE_ORDER'
   | 'UPDATE_ORDER_STATUS'
@@ -62,6 +65,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'trp_settings_v2',
   DRAWER_LOGS: 'trp_drawer_logs_v2',
   OUTBOX: 'trp_outbox_queue_v2',
+  EXPENSES: 'trp_expenses_v2',
 };
 
 export interface DrawerLogEntry {
@@ -79,6 +83,7 @@ let state = {
   tables: INITIAL_TABLES,
   customers: INITIAL_CUSTOMERS,
   orders: [] as Order[],
+  expenses: [] as ExpenseRecord[],
   settings: INITIAL_SETTINGS,
   drawerLogs: [] as DrawerLogEntry[],
   outboxQueue: [] as OutboxItem[],
@@ -97,6 +102,26 @@ const listeners = new Set<() => void>();
 
 function notify() {
   listeners.forEach((listener) => listener());
+}
+
+// Cross-tab synchronization via BroadcastChannel
+let syncChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    syncChannel = new BroadcastChannel('trp_cross_tab_sync');
+  } catch (e) {
+    console.warn('BroadcastChannel initialization warning:', e);
+  }
+}
+
+function broadcastSync(action: string, data?: unknown) {
+  if (syncChannel) {
+    try {
+      syncChannel.postMessage({ action, data, timestamp: Date.now() });
+    } catch (e) {
+      // ignore
+    }
+  }
 }
 
 // ---------------- DATABASE ROW MAPPERS ----------------
@@ -387,6 +412,7 @@ function loadFromStorage() {
     const s = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     const d = localStorage.getItem(STORAGE_KEYS.DRAWER_LOGS);
     const q = localStorage.getItem(STORAGE_KEYS.OUTBOX);
+    const e = localStorage.getItem(STORAGE_KEYS.EXPENSES);
 
     if (p) state.products = JSON.parse(p);
     if (c) state.categories = JSON.parse(c);
@@ -397,6 +423,8 @@ function loadFromStorage() {
     if (s) state.settings = JSON.parse(s);
     if (d) state.drawerLogs = JSON.parse(d);
     if (q) state.outboxQueue = JSON.parse(q);
+    if (e) state.expenses = JSON.parse(e);
+    else state.expenses = [];
 
     state.isOnline = navigator.onLine;
     state.initialized = true;
@@ -416,6 +444,7 @@ function saveToStorage() {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(state.settings));
     localStorage.setItem(STORAGE_KEYS.DRAWER_LOGS, JSON.stringify(state.drawerLogs));
     localStorage.setItem(STORAGE_KEYS.OUTBOX, JSON.stringify(state.outboxQueue));
+    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(state.expenses));
   } catch (err) {
     console.error('Failed to save storage:', err);
   }
@@ -726,6 +755,31 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
         );
         saveToStorage();
       }
+      break;
+    }
+    case 'UPDATE_CUSTOMER_FULL': {
+      const { customerId, updates } = payload as { customerId: string; updates: Partial<Customer> };
+      const dbUpdates: Record<string, unknown> = {};
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.phone !== undefined) dbUpdates.phone = updates.phone.trim();
+      if (updates.email !== undefined) dbUpdates.email = updates.email || null;
+      if (updates.tier !== undefined) dbUpdates.tier = updates.tier;
+      if (updates.pointsBalance !== undefined) dbUpdates.points_balance = updates.pointsBalance;
+      if (updates.totalSpent !== undefined) dbUpdates.total_spent = updates.totalSpent;
+      if (updates.visitCount !== undefined) dbUpdates.visit_count = updates.visitCount;
+      if (updates.birthDate !== undefined) dbUpdates.birth_date = updates.birthDate && updates.birthDate.trim() !== '' ? updates.birthDate : null;
+      if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
+
+      if (Object.keys(dbUpdates).length > 0) {
+        const { error } = await insforge.database.from('customers').update(dbUpdates).eq('id', customerId);
+        if (error) throw new Error(error.message || 'Error updating customer');
+      }
+      break;
+    }
+    case 'DELETE_CUSTOMER': {
+      const { customerId } = payload as { customerId: string };
+      const { error } = await insforge.database.from('customers').delete().eq('id', customerId);
+      if (error) throw new Error(error.message || 'Error deleting customer');
       break;
     }
     case 'INSERT_ORDER': {
@@ -1115,6 +1169,32 @@ async function dbUpdateCustomer(customerId: string, customer: Customer) {
   }
 }
 
+async function dbUpdateCustomerFull(customerId: string, updates: Partial<Customer>) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('UPDATE_CUSTOMER_FULL', { customerId, updates });
+    return;
+  }
+  try {
+    await executeDirectMutation('UPDATE_CUSTOMER_FULL', { customerId, updates });
+  } catch (err) {
+    console.warn('DB Update Customer Full failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('UPDATE_CUSTOMER_FULL', { customerId, updates });
+  }
+}
+
+async function dbDeleteCustomer(customerId: string) {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    enqueueOutboxMutation('DELETE_CUSTOMER', { customerId });
+    return;
+  }
+  try {
+    await executeDirectMutation('DELETE_CUSTOMER', { customerId });
+  } catch (err) {
+    console.warn('DB Delete Customer failed, enqueuing to Outbox:', err);
+    enqueueOutboxMutation('DELETE_CUSTOMER', { customerId });
+  }
+}
+
 async function dbInsertOrder(order: Order) {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     enqueueOutboxMutation('INSERT_ORDER', order);
@@ -1282,7 +1362,7 @@ async function syncFromDatabase() {
       state.customers = mergedCustomers;
     }
 
-    if (ordersData && ordersData.length > 0) {
+    if (ordersData) {
       const itemsList = (orderItemsData || []) as DbOrderItem[];
       const itemsByOrderId = new Map<string, OrderItem[]>();
 
@@ -1298,8 +1378,17 @@ async function syncFromDatabase() {
       );
 
       const cloudOrderIds = new Set(cloudOrders.map((o) => o.id));
+
+      // ONLY preserve offline orders that are genuinely pending in the outbox queue waiting to sync
+      const pendingOutboxOrderIds = new Set(
+        state.outboxQueue
+          .filter((item) => item.type === 'INSERT_ORDER')
+          .map((item) => item.payload?.id)
+          .filter(Boolean)
+      );
+
       const pendingLocalOrders = state.orders.filter(
-        (o) => !cloudOrderIds.has(o.id)
+        (o) => pendingOutboxOrderIds.has(o.id) && !cloudOrderIds.has(o.id)
       );
 
       state.orders = [...pendingLocalOrders, ...cloudOrders];
@@ -1387,6 +1476,80 @@ export const restaurantStore = {
 
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
+
+      // Listen to cross-tab broadcast messages
+      if (syncChannel) {
+        syncChannel.onmessage = (event) => {
+          const { action } = event.data || {};
+          if (action === 'CLEAR_SALES_RECORDS') {
+            state.orders = [];
+            state.tables = state.tables.map((t) => ({ ...t, status: 'AVAILABLE', currentOrderId: undefined }));
+            state.outboxQueue = state.outboxQueue.filter(
+              (it) => it.type !== 'INSERT_ORDER' && it.type !== 'SETTLE_ORDER' && it.type !== 'UPDATE_ORDER_STATUS'
+            );
+            saveToStorage();
+            notify();
+          } else if (action === 'ORDERS_RESTORED' || action === 'ORDER_CREATED' || action === 'ORDERS_UPDATED') {
+            try {
+              const stored = localStorage.getItem(STORAGE_KEYS.ORDERS);
+              if (stored) {
+                state.orders = JSON.parse(stored);
+                notify();
+              }
+            } catch (e) {
+              // ignore
+            }
+          } else if (action === 'TABLES_UPDATED') {
+            try {
+              const stored = localStorage.getItem(STORAGE_KEYS.TABLES);
+              if (stored) {
+                state.tables = JSON.parse(stored);
+                notify();
+              }
+            } catch (e) {
+              // ignore
+            }
+          } else if (action === 'EXPENSES_UPDATED') {
+            try {
+              const stored = localStorage.getItem(STORAGE_KEYS.EXPENSES);
+              if (stored) {
+                state.expenses = JSON.parse(stored);
+                notify();
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        };
+      }
+
+      // Listen to cross-tab storage changes
+      window.addEventListener('storage', (event) => {
+        if (!event.key) return;
+        try {
+          if (event.key === STORAGE_KEYS.ORDERS) {
+            state.orders = event.newValue ? JSON.parse(event.newValue) : [];
+            notify();
+          } else if (event.key === STORAGE_KEYS.TABLES) {
+            state.tables = event.newValue ? JSON.parse(event.newValue) : [];
+            notify();
+          } else if (event.key === STORAGE_KEYS.CUSTOMERS) {
+            state.customers = event.newValue ? JSON.parse(event.newValue) : [];
+            notify();
+          } else if (event.key === STORAGE_KEYS.SETTINGS) {
+            state.settings = event.newValue ? JSON.parse(event.newValue) : state.settings;
+            notify();
+          } else if (event.key === STORAGE_KEYS.OUTBOX) {
+            state.outboxQueue = event.newValue ? JSON.parse(event.newValue) : [];
+            notify();
+          } else if (event.key === STORAGE_KEYS.EXPENSES) {
+            state.expenses = event.newValue ? JSON.parse(event.newValue) : [];
+            notify();
+          }
+        } catch (e) {
+          // ignore
+        }
+      });
 
       // Heartbeat periodic outbox queue retry (every 15 seconds)
       setInterval(async () => {
@@ -1524,7 +1687,7 @@ export const restaurantStore = {
       ...customerData,
       id: `cust-${Date.now()}`,
       tier: 'BRONZE',
-      pointsBalance: 50, // Welcome bonus points (৳50 value)
+      pointsBalance: state.settings.welcomeBonusPoints ?? 50, // Welcome bonus points
       totalSpent: 0,
       visitCount: 0,
       joinedAt: new Date().toISOString(),
@@ -1565,6 +1728,29 @@ export const restaurantStore = {
     if (updatedCustomer) {
       dbUpdateCustomer(customerId, updatedCustomer);
     }
+  },
+
+  updateCustomer(customerId: string, updates: Partial<Customer>) {
+    state.customers = state.customers.map((cust) => {
+      if (cust.id !== customerId) return cust;
+      const updated = { ...cust, ...updates };
+      if (updates.totalSpent !== undefined && updates.tier === undefined) {
+        updated.tier = calculateTier(updated.totalSpent, state.settings);
+      }
+      return updated;
+    });
+    saveToStorage();
+    notify();
+    broadcastSync('CUSTOMER_UPDATED');
+    dbUpdateCustomerFull(customerId, updates);
+  },
+
+  deleteCustomer(customerId: string) {
+    state.customers = state.customers.filter((c) => c.id !== customerId);
+    saveToStorage();
+    notify();
+    broadcastSync('CUSTOMER_DELETED');
+    dbDeleteCustomer(customerId);
   },
 
   findCustomerByPhone(phone: string): Customer | undefined {
@@ -1666,6 +1852,23 @@ export const restaurantStore = {
       serverName: orderData.serverName,
     };
 
+    // Refresh state.orders from localStorage in case orders were cleared or changed in another tab
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEYS.ORDERS);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length < state.orders.length) {
+            state.orders = parsed;
+          }
+        } else {
+          state.orders = [];
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
     state.orders = [newOrder, ...state.orders];
 
     // If assigned to a table, update table status
@@ -1690,6 +1893,7 @@ export const restaurantStore = {
 
     saveToStorage();
     notify();
+    broadcastSync('ORDER_CREATED', { orderId: newOrder.id });
 
     // Persist Order and Items directly with COMPLETED & PAID status to InsForge Postgres DB
     dbInsertOrder(newOrder);
@@ -1794,12 +1998,169 @@ export const restaurantStore = {
     notify();
   },
 
+  async clearAllSalesRecords(): Promise<{ success: boolean; count: number; error?: string }> {
+    const totalCount = state.orders.length;
+    try {
+      // 1. Delete all order items & orders from InsForge cloud database
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        // Delete order items first (referencing orders table)
+        const { error: itemsErr } = await insforge.database
+          .from('order_items')
+          .delete()
+          .not('id', 'is', null);
+
+        if (itemsErr) {
+          console.warn('order_items delete with .not failed, using fallback:', itemsErr);
+          await insforge.database
+            .from('order_items')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000');
+        }
+
+        // Delete orders
+        const { error: ordersErr } = await insforge.database
+          .from('orders')
+          .delete()
+          .not('id', 'is', null);
+
+        if (ordersErr) {
+          console.warn('orders delete with .not failed, using fallback:', ordersErr);
+          await insforge.database
+            .from('orders')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000');
+        }
+
+        // Reset dining tables current order
+        await insforge.database
+          .from('dining_tables')
+          .update({ current_order_id: null, status: 'AVAILABLE' })
+          .not('id', 'is', null);
+      }
+
+      // 2. Clear local store
+      state.orders = [];
+      state.tables = state.tables.map((t) => ({ ...t, status: 'AVAILABLE', currentOrderId: undefined }));
+      state.outboxQueue = state.outboxQueue.filter(
+        (it) => it.type !== 'INSERT_ORDER' && it.type !== 'SETTLE_ORDER' && it.type !== 'UPDATE_ORDER_STATUS'
+      );
+      saveToStorage();
+      notify();
+      broadcastSync('CLEAR_SALES_RECORDS');
+
+      return { success: true, count: totalCount };
+    } catch (err: unknown) {
+      console.error('Error clearing sales records:', err);
+      state.orders = [];
+      state.tables = state.tables.map((t) => ({ ...t, status: 'AVAILABLE', currentOrderId: undefined }));
+      state.outboxQueue = state.outboxQueue.filter(
+        (it) => it.type !== 'INSERT_ORDER' && it.type !== 'SETTLE_ORDER' && it.type !== 'UPDATE_ORDER_STATUS'
+      );
+      saveToStorage();
+      notify();
+      broadcastSync('CLEAR_SALES_RECORDS');
+      const message = err instanceof Error ? err.message : 'Database error';
+      return { success: false, count: totalCount, error: message };
+    }
+  },
+
+  async restoreOrders(restoredOrders: Order[]): Promise<{ success: boolean; count: number; error?: string }> {
+    if (!restoredOrders || restoredOrders.length === 0) {
+      return { success: false, count: 0, error: 'No orders provided to restore' };
+    }
+
+    try {
+      // 1. Merge into local store
+      const existingMap = new Map<string, Order>();
+      for (const ord of state.orders) {
+        existingMap.set(ord.orderNumber, ord);
+      }
+      for (const ord of restoredOrders) {
+        existingMap.set(ord.orderNumber, ord);
+      }
+
+      state.orders = Array.from(existingMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      saveToStorage();
+      notify();
+      broadcastSync('ORDERS_RESTORED');
+
+      // 2. Upsert into InsForge database
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        const dbOrders = restoredOrders.map((o) => ({
+          ...toDbOrder(o),
+          customer_id: null,
+          table_id: null,
+        }));
+
+        for (let i = 0; i < dbOrders.length; i += 50) {
+          const batch = dbOrders.slice(i, i + 50);
+          const { error: ordErr } = await insforge.database.from('orders').upsert(batch);
+          if (ordErr) console.warn('Warning upserting restored orders batch:', ordErr);
+        }
+
+        const allDbItems: ReturnType<typeof toDbOrderItem>[] = [];
+        for (const ord of restoredOrders) {
+          if (ord.items && ord.items.length > 0) {
+            for (const it of ord.items) {
+              const mapped = toDbOrderItem(it, ord.id);
+              mapped.product_id = null;
+              allDbItems.push(mapped);
+            }
+          }
+        }
+
+        for (let i = 0; i < allDbItems.length; i += 100) {
+          const batch = allDbItems.slice(i, i + 100);
+          const { error: itemsErr } = await insforge.database.from('order_items').upsert(batch);
+          if (itemsErr) console.warn('Warning upserting restored order items batch:', itemsErr);
+        }
+      }
+
+      return { success: true, count: restoredOrders.length };
+    } catch (err: unknown) {
+      console.error('Error restoring orders:', err);
+      const message = err instanceof Error ? err.message : 'Database restore error';
+      return { success: false, count: restoredOrders.length, error: message };
+    }
+  },
+
+  // ---------------- EXPENSES RECORDING ----------------
+  addExpense(expenseData: Omit<ExpenseRecord, 'id' | 'createdAt'> & { createdAt?: string }): ExpenseRecord {
+    const newExpense: ExpenseRecord = {
+      id: `exp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      ...expenseData,
+      createdAt: expenseData.createdAt || new Date().toISOString(),
+    };
+    state.expenses = [newExpense, ...state.expenses];
+    saveToStorage();
+    notify();
+    broadcastSync('EXPENSES_UPDATED');
+    return newExpense;
+  },
+
+  deleteExpense(id: string): void {
+    state.expenses = state.expenses.filter((e) => e.id !== id);
+    saveToStorage();
+    notify();
+    broadcastSync('EXPENSES_UPDATED');
+  },
+
+  clearAllExpenses(): void {
+    state.expenses = [];
+    saveToStorage();
+    notify();
+    broadcastSync('EXPENSES_UPDATED');
+  },
+
   resetToDefaultSeed() {
     state.products = INITIAL_PRODUCTS;
     state.categories = INITIAL_CATEGORIES;
     state.tables = INITIAL_TABLES;
     state.customers = [];
     state.orders = [];
+    state.expenses = [];
     state.settings = INITIAL_SETTINGS;
     state.drawerLogs = [];
     saveToStorage();

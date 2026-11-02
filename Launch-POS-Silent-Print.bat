@@ -35,3 +35,4 @@ if exist %EDGE_PATH% (
 
 echo Browser not found in standard paths. Opening default browser...
 start %POS_URL%
+
