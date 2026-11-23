@@ -180,8 +180,20 @@
     top: 0 !important;
     width: 70mm !important;
     max-width: 70mm !important;
-    padding: 3mm 4.5mm !important;
+    padding: 0 !important;
     margin: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+  }
+
+  .thermal-receipt-copy {
+    width: 70mm !important;
+    max-width: 70mm !important;
+    padding: 3mm 4.5mm 6mm 4.5mm !important;
+    margin: 0 0 5mm 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
     font-family: Arial, Helvetica, sans-serif !important;
@@ -189,9 +201,18 @@
     line-height: 1.35 !important;
     box-shadow: none !important;
     border: none !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    box-sizing: border-box !important;
     overflow: hidden !important;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
+  }
+
+  .thermal-receipt-copy:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+    margin-bottom: 0 !important;
   }
 
   #printable-z-report {

@@ -237,6 +237,7 @@ interface DbSystemSettings {
   auto_kick_drawer_on_cash: boolean | null;
   drawer_kick_code_hex: string | null;
   receipt_footer_message: string | null;
+  receipt_copies?: number | string | null;
   updated_at?: string;
 }
 
@@ -974,6 +975,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (settings.autoKickDrawerOnCash !== undefined) dbSettings.auto_kick_drawer_on_cash = settings.autoKickDrawerOnCash;
       if (settings.drawerKickCodeHex !== undefined) dbSettings.drawer_kick_code_hex = settings.drawerKickCodeHex;
       if (settings.receiptFooterMessage !== undefined) dbSettings.receipt_footer_message = settings.receiptFooterMessage;
+      if (settings.receiptCopies !== undefined) dbSettings.receipt_copies = settings.receiptCopies;
 
       const { error } = await insforge.database.from('system_settings').upsert([dbSettings]);
       if (error) throw new Error(error.message || 'Error updating settings');
@@ -1450,6 +1452,7 @@ async function syncFromDatabase() {
           autoKickDrawerOnCash: sData.auto_kick_drawer_on_cash ?? state.settings.autoKickDrawerOnCash,
           drawerKickCodeHex: sData.drawer_kick_code_hex ?? state.settings.drawerKickCodeHex,
           receiptFooterMessage: sData.receipt_footer_message ?? state.settings.receiptFooterMessage,
+          receiptCopies: sData.receipt_copies !== null && sData.receipt_copies !== undefined ? Number(sData.receipt_copies) : (state.settings.receiptCopies ?? 3),
         };
       }
     }

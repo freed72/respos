@@ -57,6 +57,7 @@ import {
   AlertTriangle,
   WalletCards,
   Tag,
+  Copy,
 } from 'lucide-react';
 import { useRestaurantStore } from '@/lib/store';
 import { downloadOrdersCSV, parseOrdersFromCSV } from '@/lib/orders-csv';
@@ -2831,6 +2832,68 @@ export default function AdminDashboardPage() {
                       onChange={(e) => updateSettings({ autoPrintReceipt: e.target.checked })}
                       className="w-5 h-5 accent-amber-500 cursor-pointer rounded"
                     />
+                  </div>
+
+                  {/* Receipt Print Copies Selector */}
+                  <div className="p-4 bg-zinc-950 rounded-xl border border-zinc-800 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-white text-xs flex items-center gap-2">
+                          <Copy className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Thermal Receipt Print Copies per Order</span>
+                        </h4>
+                        <p className="text-zinc-400 text-[11px] mt-0.5">
+                          Set how many identical slips / sheets are printed for each settled transaction.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800 self-start sm:self-auto">
+                        {[1, 2, 3, 4].map((count) => {
+                          const isSelected = (settings.receiptCopies ?? 3) === count;
+                          return (
+                            <button
+                              key={count}
+                              type="button"
+                              onClick={() => updateSettings({ receiptCopies: count })}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition flex items-center gap-1.5 cursor-pointer ${
+                                isSelected
+                                  ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                              }`}
+                            >
+                              <span>{count} {count === 1 ? 'Copy' : 'Copies'}</span>
+                              {count === 3 && (
+                                <span className={`text-[9px] px-1 py-0.2 rounded font-sans uppercase font-black ${
+                                  isSelected ? 'bg-amber-600 text-zinc-950' : 'bg-amber-500/20 text-amber-300'
+                                }`}>
+                                  Default
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 text-[11px] font-mono border-t border-zinc-900">
+                      <div className={`p-2.5 rounded-lg border flex items-center gap-2 transition ${
+                        (settings.receiptCopies ?? 3) >= 1 ? 'bg-zinc-900/60 border-zinc-800 text-amber-300' : 'opacity-40 border-transparent text-zinc-500'
+                      }`}>
+                        <span className="w-5 h-5 rounded-full bg-zinc-800 text-amber-400 text-[10px] font-bold flex items-center justify-center shrink-0">1</span>
+                        <span>Customer Copy</span>
+                      </div>
+                      <div className={`p-2.5 rounded-lg border flex items-center gap-2 transition ${
+                        (settings.receiptCopies ?? 3) >= 2 ? 'bg-zinc-900/60 border-zinc-800 text-amber-300' : 'opacity-40 border-transparent text-zinc-500'
+                      }`}>
+                        <span className="w-5 h-5 rounded-full bg-zinc-800 text-amber-400 text-[10px] font-bold flex items-center justify-center shrink-0">2</span>
+                        <span>Merchant / Accounts Copy</span>
+                      </div>
+                      <div className={`p-2.5 rounded-lg border flex items-center gap-2 transition ${
+                        (settings.receiptCopies ?? 3) >= 3 ? 'bg-zinc-900/60 border-zinc-800 text-amber-300' : 'opacity-40 border-transparent text-zinc-500'
+                      }`}>
+                        <span className="w-5 h-5 rounded-full bg-zinc-800 text-amber-400 text-[10px] font-bold flex items-center justify-center shrink-0">3</span>
+                        <span>Kitchen / Store Copy</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Auto-Kick Solenoid Toggle */}

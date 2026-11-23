@@ -29,6 +29,7 @@ export const INITIAL_SETTINGS: SystemSettings = {
   autoPrintReceipt: true,
   drawerKickCodeHex: '1B 70 00 19 FA',
   receiptFooterMessage: 'Thank you for gracing The Royal Palette! Visit again.',
+  receiptCopies: 3,
 };
 
 export const INITIAL_CATEGORIES: Category[] = [

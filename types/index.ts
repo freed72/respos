@@ -165,6 +165,7 @@ export interface SystemSettings {
   autoPrintReceipt?: boolean;
   drawerKickCodeHex: string; // "1B 70 00 19 FA"
   receiptFooterMessage: string;
+  receiptCopies?: number; // Number of thermal receipt slips printed per order (e.g. 1, 2, 3)
 }
 
 export interface StaffMember {

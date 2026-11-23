@@ -124,6 +124,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     auto_kick_drawer_on_cash BOOLEAN DEFAULT TRUE,
     drawer_kick_code_hex TEXT DEFAULT '1B 70 00 19 FA',
     receipt_footer_message TEXT DEFAULT 'Thank you for gracing The Royal Palette! Visit again.',
+    receipt_copies INT DEFAULT 3,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
