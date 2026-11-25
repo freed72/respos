@@ -1,4 +1,4 @@
--- The Royal Palette Restaurant Management System Schema for InsForge PostgreSQL DB
+-- The Royal Palette Restaurant Management System Schema for Supabase PostgreSQL DB
 
 -- 1. Categories Table
 CREATE TABLE IF NOT EXISTS categories (

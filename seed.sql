@@ -1,4 +1,4 @@
--- Initial Seed Data for The Royal Palette InsForge Database
+-- Initial Seed Data for The Royal Palette Supabase Database
 
 -- Categories
 INSERT INTO categories (id, name, slug, description, icon_name, sort_order) VALUES

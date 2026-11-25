@@ -195,7 +195,7 @@ export function SyncStatusBadge({ variant = 'admin', className = '' }: SyncStatu
                   {isOnline ? 'Cloud Database Connected' : 'Offline Safe Mode Active'}
                 </h4>
                 <p className="text-[10px] text-slate-400 font-mono">
-                  {isOnline ? 'Postgres BaaS • InsForge Engine' : 'Zero-Latency Local Storage Cache'}
+                  {isOnline ? 'Postgres BaaS • Supabase Engine' : 'Zero-Latency Local Storage Cache'}
                 </p>
               </div>
             </div>

@@ -24,7 +24,7 @@ import {
   INITIAL_TABLES,
 } from './mock-data';
 import { triggerCashDrawer } from './hardware/cashDrawer';
-import { insforge } from './insforge';
+import { supabase } from './supabase';
 
 export type OutboxActionType =
   | 'INSERT_PRODUCT'
@@ -547,7 +547,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
   switch (type) {
     case 'INSERT_PRODUCT': {
       const product = payload as Product;
-      const { error } = await insforge.database.from('products').upsert([
+      const { error } = await supabase.from('products').upsert([
         {
           id: product.id,
           name: product.name,
@@ -584,20 +584,20 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (updates.sortOrder !== undefined) dbUpdates.sort_order = updates.sortOrder;
 
       if (Object.keys(dbUpdates).length > 0) {
-        const { error } = await insforge.database.from('products').update(dbUpdates).eq('id', id);
+        const { error } = await supabase.from('products').update(dbUpdates).eq('id', id);
         if (error) throw new Error(error.message || 'Error updating product');
       }
       break;
     }
     case 'DELETE_PRODUCT': {
       const { id } = payload as { id: string };
-      const { error } = await insforge.database.from('products').delete().eq('id', id);
+      const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) throw new Error(error.message || 'Error deleting product');
       break;
     }
     case 'INSERT_CATEGORY': {
       const category = payload as Category;
-      const { error } = await insforge.database.from('categories').upsert([
+      const { error } = await supabase.from('categories').upsert([
         {
           id: category.id,
           name: category.name,
@@ -622,20 +622,20 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
 
       if (Object.keys(dbUpdates).length > 0) {
-        const { error } = await insforge.database.from('categories').update(dbUpdates).eq('id', id);
+        const { error } = await supabase.from('categories').update(dbUpdates).eq('id', id);
         if (error) throw new Error(error.message || 'Error updating category');
       }
       break;
     }
     case 'DELETE_CATEGORY': {
       const { id } = payload as { id: string };
-      const { error } = await insforge.database.from('categories').delete().eq('id', id);
+      const { error } = await supabase.from('categories').delete().eq('id', id);
       if (error) throw new Error(error.message || 'Error deleting category');
       break;
     }
     case 'INSERT_TABLE': {
       const table = payload as Table;
-      const { error } = await insforge.database.from('dining_tables').upsert([
+      const { error } = await supabase.from('dining_tables').upsert([
         {
           id: table.id,
           table_number: table.tableNumber,
@@ -650,7 +650,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'UPDATE_TABLE': {
       const { tableId, status, currentOrderId } = payload as { tableId: string; status: TableStatus; currentOrderId?: string };
-      const { error } = await insforge.database.from('dining_tables').update({
+      const { error } = await supabase.from('dining_tables').update({
         status,
         current_order_id: currentOrderId || null,
       }).eq('id', tableId);
@@ -667,14 +667,14 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (updates.currentOrderId !== undefined) dbUpdates.current_order_id = updates.currentOrderId || null;
 
       if (Object.keys(dbUpdates).length > 0) {
-        const { error } = await insforge.database.from('dining_tables').update(dbUpdates).eq('id', tableId);
+        const { error } = await supabase.from('dining_tables').update(dbUpdates).eq('id', tableId);
         if (error) throw new Error(error.message || 'Error full updating table');
       }
       break;
     }
     case 'DELETE_TABLE': {
       const { tableId } = payload as { tableId: string };
-      const { error } = await insforge.database.from('dining_tables').delete().eq('id', tableId);
+      const { error } = await supabase.from('dining_tables').delete().eq('id', tableId);
       if (error) throw new Error(error.message || 'Error deleting table');
       break;
     }
@@ -682,7 +682,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       const customer = payload as Customer;
       // 1. Check if customer with this phone number already exists in DB
       const cleanPhone = customer.phone ? customer.phone.trim() : '';
-      const { data: existingCust } = await insforge.database
+      const { data: existingCust } = await supabase
         .from('customers')
         .select('id, points_balance, total_spent, visit_count, tier')
         .eq('phone', cleanPhone)
@@ -698,7 +698,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
         const updatedVisits = (Number(existingCust.visit_count) || 0) + (customer.visitCount || 0);
         const updatedTier = calculateTier(updatedSpent, state.settings);
 
-        await insforge.database.from('customers').update({
+        await supabase.from('customers').update({
           points_balance: updatedBalance,
           total_spent: updatedSpent,
           visit_count: updatedVisits,
@@ -728,7 +728,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       }
 
       // 2. New customer: upsert to database safely
-      const { error } = await insforge.database.from('customers').upsert([
+      const { error } = await supabase.from('customers').upsert([
         {
           id: customer.id,
           name: customer.name,
@@ -753,7 +753,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       const { customerId, customer } = payload as { customerId: string; customer: Customer };
       // Try to find customer by id OR by phone
       let targetId = customerId;
-      const { data: byId } = await insforge.database
+      const { data: byId } = await supabase
         .from('customers')
         .select('id, points_balance, total_spent, visit_count, tier')
         .eq('id', targetId)
@@ -761,8 +761,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
 
       let targetRecord = byId;
       if (!targetRecord && customer.phone) {
-        const { data: byPhone } = await insforge.database
-          .from('customers')
+        const { data: byPhone } = await supabase.from('customers')
           .select('id, points_balance, total_spent, visit_count, tier')
           .eq('phone', customer.phone.trim())
           .maybeSingle();
@@ -790,7 +789,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
           finalTier = calculateTier(finalSpent, state.settings);
         }
 
-        const { error } = await insforge.database.from('customers').update({
+        const { error } = await supabase.from('customers').update({
           points_balance: finalPoints,
           total_spent: finalSpent,
           visit_count: finalVisits,
@@ -822,14 +821,14 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes || null;
 
       if (Object.keys(dbUpdates).length > 0) {
-        const { error } = await insforge.database.from('customers').update(dbUpdates).eq('id', customerId);
+        const { error } = await supabase.from('customers').update(dbUpdates).eq('id', customerId);
         if (error) throw new Error(error.message || 'Error updating customer');
       }
       break;
     }
     case 'DELETE_CUSTOMER': {
       const { customerId } = payload as { customerId: string };
-      const { error } = await insforge.database.from('customers').delete().eq('id', customerId);
+      const { error } = await supabase.from('customers').delete().eq('id', customerId);
       if (error) throw new Error(error.message || 'Error deleting customer');
       break;
     }
@@ -839,15 +838,14 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       // 1. Sanitize customer_id against foreign key constraint
       let safeCustomerId = order.customerId || null;
       if (safeCustomerId) {
-        const { data: custExists } = await insforge.database
-          .from('customers')
+        const { data: custExists } = await supabase.from('customers')
           .select('id')
           .eq('id', safeCustomerId)
           .maybeSingle();
         if (!custExists) {
           // If customer ID doesn't exist, try looking up by phone
           if (order.customerPhone) {
-            const { data: custByPhone } = await insforge.database
+            const { data: custByPhone } = await supabase
               .from('customers')
               .select('id')
               .eq('phone', order.customerPhone.trim())
@@ -862,8 +860,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       // 2. Sanitize table_id against foreign key constraint
       let safeTableId = order.tableId || null;
       if (safeTableId) {
-        const { data: tblExists } = await insforge.database
-          .from('dining_tables')
+        const { data: tblExists } = await supabase.from('dining_tables')
           .select('id')
           .eq('id', safeTableId)
           .maybeSingle();
@@ -874,7 +871,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
 
       // 3. Resolve order_number collisions with existing orders
       let finalOrderNumber = order.orderNumber;
-      const { data: existingWithNumber } = await insforge.database
+      const { data: existingWithNumber } = await supabase
         .from('orders')
         .select('id, order_number')
         .eq('order_number', finalOrderNumber)
@@ -895,7 +892,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       };
 
       // 4. Upsert Order (never fails with duplicate primary key on retry)
-      const { error: orderError } = await insforge.database.from('orders').upsert([dbOrderRecord]);
+      const { error: orderError } = await supabase.from('orders').upsert([dbOrderRecord]);
       if (orderError) throw new Error(orderError.message || 'Error inserting order');
 
       // 5. Sanitize and upsert order items
@@ -904,7 +901,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
           order.items.map(async (it) => {
             let safeProductId = it.productId || null;
             if (safeProductId) {
-              const { data: prodExists } = await insforge.database
+              const { data: prodExists } = await supabase
                 .from('products')
                 .select('id')
                 .eq('id', safeProductId)
@@ -919,7 +916,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
           })
         );
 
-        const { error: itemsError } = await insforge.database.from('order_items').upsert(dbItems);
+        const { error: itemsError } = await supabase.from('order_items').upsert(dbItems);
         if (itemsError) throw new Error(itemsError.message || 'Error inserting order items');
       }
 
@@ -927,7 +924,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (safeCustomerId && order.status === 'COMPLETED') {
         const localCust = state.customers.find((c) => c.id === safeCustomerId);
         if (localCust) {
-          await insforge.database.from('customers').update({
+          await supabase.from('customers').update({
             points_balance: localCust.pointsBalance,
             total_spent: localCust.totalSpent,
             visit_count: localCust.visitCount,
@@ -952,7 +949,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
         cleanPayments = [{ method: paymentMethod, amount: 0 }];
       }
 
-      const { error } = await insforge.database.from('orders').update({
+      const { error } = await supabase.from('orders').update({
         payment_status: 'PAID',
         payment_method: paymentMethod,
         payments: cleanPayments,
@@ -964,13 +961,13 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
     }
     case 'UPDATE_ORDER_STATUS': {
       const { orderId, status } = payload as { orderId: string; status: OrderStatus };
-      const { error } = await insforge.database.from('orders').update({ status }).eq('id', orderId);
+      const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
       if (error) throw new Error(error.message || 'Error updating order status');
       break;
     }
     case 'INSERT_DRAWER_LOG': {
       const log = payload as DrawerLogEntry;
-      const { error } = await insforge.database.from('drawer_logs').upsert([
+      const { error } = await supabase.from('drawer_logs').upsert([
         {
           id: log.id,
           reason: log.reason,
@@ -1006,7 +1003,7 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       // are persisted locally in localStorage and synchronized cross-tab, avoiding schema mismatch with cloud DB.
 
       if (Object.keys(dbSettings).length > 2) {
-        const { error } = await insforge.database.from('system_settings').upsert([dbSettings]);
+        const { error } = await supabase.from('system_settings').upsert([dbSettings]);
         if (error) {
           console.warn('[DB Settings Sync] Cloud update notice:', error.message);
         }
@@ -1319,7 +1316,7 @@ async function dbUpdateSettings(settings: Partial<SystemSettings>) {
   }
 }
 
-// ---------------- INSFORGE DATABASE LIVE SYNC ----------------
+// ---------------- SUPABASE DATABASE LIVE SYNC ----------------
 async function syncFromDatabase() {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     state.isOnline = false;
@@ -1338,14 +1335,14 @@ async function syncFromDatabase() {
       { data: drawerLogsData },
       { data: settingsData },
     ] = await Promise.all([
-      insforge.database.from('categories').select(),
-      insforge.database.from('products').select(),
-      insforge.database.from('dining_tables').select(),
-      insforge.database.from('customers').select(),
-      insforge.database.from('orders').select().order('created_at', { ascending: false }),
-      insforge.database.from('order_items').select(),
-      insforge.database.from('drawer_logs').select().order('timestamp', { ascending: false }).limit(50),
-      insforge.database.from('system_settings').select().eq('id', 'GLOBAL_CONFIG').maybeSingle(),
+      supabase.from('categories').select(),
+      supabase.from('products').select(),
+      supabase.from('dining_tables').select(),
+      supabase.from('customers').select(),
+      supabase.from('orders').select().order('created_at', { ascending: false }),
+      supabase.from('order_items').select(),
+      supabase.from('drawer_logs').select().order('timestamp', { ascending: false }).limit(50),
+      supabase.from('system_settings').select().eq('id', 'GLOBAL_CONFIG').maybeSingle(),
     ]);
 
     state.isOnline = true;
@@ -1493,7 +1490,7 @@ async function syncFromDatabase() {
     saveToStorage();
     notify();
   } catch (err) {
-    console.warn('InsForge database sync warning (using cached local data):', err);
+    console.warn('Supabase database sync warning (using cached local data):', err);
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       state.isOnline = false;
       notify();
@@ -2000,7 +1997,7 @@ export const restaurantStore = {
     notify();
     broadcastSync('ORDER_CREATED', { orderId: newOrder.id });
 
-    // Persist Order and Items directly with COMPLETED & PAID status to InsForge Postgres DB
+    // Persist Order and Items directly with COMPLETED & PAID status to Supabase Postgres DB
     dbInsertOrder(newOrder);
 
     return newOrder;
@@ -2051,7 +2048,7 @@ export const restaurantStore = {
     saveToStorage();
     notify();
 
-    // Persist Settlement updates to InsForge Postgres DB
+    // Persist Settlement updates to Supabase Postgres DB
     dbSettleOrder(orderId, paymentMethod, finalPayments, completedAt);
   },
 
@@ -2107,39 +2104,36 @@ export const restaurantStore = {
   async clearAllSalesRecords(): Promise<{ success: boolean; count: number; error?: string }> {
     const totalCount = state.orders.length;
     try {
-      // 1. Delete all order items & orders from InsForge cloud database
+      // 1. Delete all order items & orders from Supabase cloud database
       if (typeof navigator === 'undefined' || navigator.onLine) {
         // Delete order items first (referencing orders table)
-        const { error: itemsErr } = await insforge.database
-          .from('order_items')
+        const { error: itemsErr } = await supabase.from('order_items')
           .delete()
           .not('id', 'is', null);
 
         if (itemsErr) {
           console.warn('order_items delete with .not failed, using fallback:', itemsErr);
-          await insforge.database
+          await supabase
             .from('order_items')
             .delete()
             .neq('id', '00000000-0000-0000-0000-000000000000');
         }
 
         // Delete orders
-        const { error: ordersErr } = await insforge.database
-          .from('orders')
+        const { error: ordersErr } = await supabase.from('orders')
           .delete()
           .not('id', 'is', null);
 
         if (ordersErr) {
           console.warn('orders delete with .not failed, using fallback:', ordersErr);
-          await insforge.database
+          await supabase
             .from('orders')
             .delete()
             .neq('id', '00000000-0000-0000-0000-000000000000');
         }
 
         // Reset dining tables current order
-        await insforge.database
-          .from('dining_tables')
+        await supabase.from('dining_tables')
           .update({ current_order_id: null, status: 'AVAILABLE' })
           .not('id', 'is', null);
       }
@@ -2192,7 +2186,7 @@ export const restaurantStore = {
       notify();
       broadcastSync('ORDERS_RESTORED');
 
-      // 2. Upsert into InsForge database
+      // 2. Upsert into Supabase database
       if (typeof navigator === 'undefined' || navigator.onLine) {
         const dbOrders = restoredOrders.map((o) => ({
           ...toDbOrder(o),
@@ -2202,7 +2196,7 @@ export const restaurantStore = {
 
         for (let i = 0; i < dbOrders.length; i += 50) {
           const batch = dbOrders.slice(i, i + 50);
-          const { error: ordErr } = await insforge.database.from('orders').upsert(batch);
+          const { error: ordErr } = await supabase.from('orders').upsert(batch);
           if (ordErr) console.warn('Warning upserting restored orders batch:', ordErr);
         }
 
@@ -2219,7 +2213,7 @@ export const restaurantStore = {
 
         for (let i = 0; i < allDbItems.length; i += 100) {
           const batch = allDbItems.slice(i, i + 100);
-          const { error: itemsErr } = await insforge.database.from('order_items').upsert(batch);
+          const { error: itemsErr } = await supabase.from('order_items').upsert(batch);
           if (itemsErr) console.warn('Warning upserting restored order items batch:', itemsErr);
         }
       }
