@@ -32,17 +32,17 @@ export function Footer() {
               </span>
             </div>
             <p className="text-slate-400 font-light leading-relaxed">
-              Authentic Dum-Pukht & fine Mughlai dining at BNS Mongla, Khulna.
+              Authentic Dum-Pukht & fine Mughlai dining at Cost guard road, digraj, mongla.
             </p>
             <div className="flex items-center justify-center md:justify-start gap-4 text-[11px] text-slate-400 pt-1">
               <span className="flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                <span>{settings.address || '123, BNS Mongla, Khulna'}</span>
+                <span>{settings.address || 'Cost guard road, digraj, mongla, bagerhat'}</span>
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">
                 <Phone className="w-3.5 h-3.5 text-amber-400" />
-                <span>{settings.phone || '01712345678'}</span>
+                <span>{settings.phone || '01348263070'}</span>
               </span>
             </div>
           </div>

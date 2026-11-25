@@ -2,13 +2,13 @@ import { Category, Customer, Product, SystemSettings, Table } from '@/types';
 
 export const INITIAL_SETTINGS: SystemSettings = {
   restaurantName: 'The Royal Palette',
-  tagline: 'A Symphony of Royal Flavors & Contemporary Elegance',
+  tagline: 'Where premium quality meets finest service',
   currency: '৳',
   currencyCode: 'BDT',
-  address: '123, BNS Mongla, Khulna',
-  phone: '01712345678',
+  address: 'Cost guard road, digraj, mongla, bagerhat',
+  phone: '01348263070',
   email: 'concierge@royalpalette.com.bd',
-  binNumber: 'BIN-002938471-0102',
+  binNumber: 'BIN-000000000-0000',
   vatPercent: 0,
   serviceChargePercent: 0,
   loyaltyPointsPer100BDT: {
@@ -30,6 +30,7 @@ export const INITIAL_SETTINGS: SystemSettings = {
   drawerKickCodeHex: '1B 70 00 19 FA',
   receiptFooterMessage: 'Thank you for gracing The Royal Palette! Visit again.',
   receiptCopies: 3,
+  receiptCutMode: 'PAGE_BREAK',
 };
 
 export const INITIAL_CATEGORIES: Category[] = [

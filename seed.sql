@@ -52,5 +52,5 @@ ON CONFLICT (id) DO UPDATE SET price = EXCLUDED.price, image_url = EXCLUDED.imag
 
 -- Global System Settings
 INSERT INTO system_settings (id, restaurant_name, tagline, currency, currency_code, address, phone, bin_number, vat_percent, service_charge_percent)
-VALUES ('GLOBAL_CONFIG', 'The Royal Palette', 'A Symphony of Royal Flavors & Contemporary Elegance', '৳', 'BDT', 'Plot 42, Road 11, Block D, Gulshan-2, Dhaka 1212', '+880 1711-234567', 'BIN-002938471-0102', 5.00, 5.00)
+VALUES ('GLOBAL_CONFIG', 'The Royal Palette', 'Where premium quality meets finest service', '৳', 'BDT', 'Cost guard road, digraj, mongla, bagerhat', '01348263070', 'BIN-000000000-0000', 5.00, 5.00)
 ON CONFLICT (id) DO UPDATE SET restaurant_name = EXCLUDED.restaurant_name;

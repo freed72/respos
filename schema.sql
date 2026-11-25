@@ -112,19 +112,20 @@ CREATE TABLE IF NOT EXISTS drawer_logs (
 CREATE TABLE IF NOT EXISTS system_settings (
     id TEXT PRIMARY KEY DEFAULT 'GLOBAL_CONFIG',
     restaurant_name TEXT DEFAULT 'The Royal Palette',
-    tagline TEXT DEFAULT 'A Symphony of Royal Flavors & Contemporary Elegance',
+    tagline TEXT DEFAULT 'Where premium quality meets finest service',
     currency TEXT DEFAULT '৳',
     currency_code TEXT DEFAULT 'BDT',
-    address TEXT DEFAULT 'Plot 42, Road 11, Block D, Gulshan-2, Dhaka 1212',
-    phone TEXT DEFAULT '+880 1711-234567',
+    address TEXT DEFAULT 'Cost guard road, digraj, mongla, bagerhat',
+    phone TEXT DEFAULT '01348263070',
     email TEXT DEFAULT 'concierge@royalpalette.com.bd',
-    bin_number TEXT DEFAULT 'BIN-002938471-0102',
+    bin_number TEXT DEFAULT 'BIN-000000000-0000',
     vat_percent NUMERIC(5, 2) DEFAULT 5.00,
     service_charge_percent NUMERIC(5, 2) DEFAULT 5.00,
     auto_kick_drawer_on_cash BOOLEAN DEFAULT TRUE,
     drawer_kick_code_hex TEXT DEFAULT '1B 70 00 19 FA',
     receipt_footer_message TEXT DEFAULT 'Thank you for gracing The Royal Palette! Visit again.',
     receipt_copies INT DEFAULT 3,
+    receipt_cut_mode TEXT DEFAULT 'PAGE_BREAK',
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

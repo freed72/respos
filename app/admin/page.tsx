@@ -58,6 +58,7 @@ import {
   WalletCards,
   Tag,
   Copy,
+  Scissors,
 } from 'lucide-react';
 import { useRestaurantStore } from '@/lib/store';
 import { downloadOrdersCSV, parseOrdersFromCSV } from '@/lib/orders-csv';
@@ -2892,6 +2893,72 @@ export default function AdminDashboardPage() {
                       }`}>
                         <span className="w-5 h-5 rounded-full bg-zinc-800 text-amber-400 text-[10px] font-bold flex items-center justify-center shrink-0">3</span>
                         <span>Kitchen / Store Copy</span>
+                      </div>
+                    </div>
+
+                    {/* Paper Cut & Separation Mode */}
+                    <div className="pt-3 border-t border-zinc-900 space-y-2.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <label className="text-white font-bold text-xs flex items-center gap-1.5">
+                            <Scissors className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Auto-Cutter Paper Separation Method</span>
+                          </label>
+                          <p className="text-zinc-400 text-[11px] mt-0.5">
+                            Choose how thermal paper is physically cut between each copy.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800 self-start sm:self-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => updateSettings({ receiptCutMode: 'PAGE_BREAK' })}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                              (settings.receiptCutMode || 'PAGE_BREAK') === 'PAGE_BREAK'
+                                ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                            }`}
+                          >
+                            <span>Multi-Page (Driver Cut)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateSettings({ receiptCutMode: 'SEPARATE_JOBS' })}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                              settings.receiptCutMode === 'SEPARATE_JOBS'
+                                ? 'bg-amber-500 text-zinc-950 shadow-sm'
+                                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                            }`}
+                          >
+                            <span>Separate Jobs (Auto-Cut)</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Hardware Explanation Note */}
+                      <div className="p-3 bg-zinc-900/80 rounded-xl border border-zinc-800 text-[11px] leading-relaxed text-zinc-300 space-y-1.5">
+                        <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Hardware Auto-Cutter Setup Guide:</span>
+                        </div>
+                        {(settings.receiptCutMode || 'PAGE_BREAK') === 'PAGE_BREAK' ? (
+                          <div className="space-y-1 text-zinc-400">
+                            <p>
+                              <strong className="text-white">Multi-Page Mode (1 Print Dialog):</strong> Sends all copies in one document with CSS page breaks.
+                            </p>
+                            <p className="text-zinc-300">
+                              ✂️ <strong>To make your Rongta RP335 / thermal printer cut each copy:</strong> Open Windows <strong>Settings → Printers &amp; Scanners → Rongta RP335 → Printer Properties → Device Settings</strong>, find <strong>&ldquo;Paper Cut&rdquo;</strong> (or Cut Option), and change it from <em>&ldquo;Document Cut&rdquo;</em> to <strong className="text-amber-300">&ldquo;Page Cut&rdquo;</strong>.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1 text-zinc-400">
+                            <p>
+                              <strong className="text-white">Separate Jobs Mode (Independent Cuts):</strong> Sends each copy as a distinct print job one after another. Since every document finishes individually, your thermal printer driver automatically fires its standard end-of-document cutter after each copy.
+                            </p>
+                            <p className="text-amber-300 font-medium">
+                              ✓ Best choice when running Chrome with the <code>--kiosk-printing</code> flag for instant, silent printing without prompts.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

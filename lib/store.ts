@@ -237,7 +237,6 @@ interface DbSystemSettings {
   auto_kick_drawer_on_cash: boolean | null;
   drawer_kick_code_hex: string | null;
   receipt_footer_message: string | null;
-  receipt_copies?: number | string | null;
   updated_at?: string;
 }
 
@@ -441,13 +440,40 @@ function loadFromStorage() {
     else state.orders = [];
     if (s) {
       try {
-        state.settings = { ...INITIAL_SETTINGS, ...JSON.parse(s) };
+        const parsed = JSON.parse(s);
+        // If local storage still holds old legacy hardcoded demo defaults, upgrade to the new official defaults
+        if (parsed.tagline === 'A Symphony of Royal Flavors & Contemporary Elegance') {
+          parsed.tagline = INITIAL_SETTINGS.tagline;
+        }
+        if (parsed.address === '123, BNS Mongla, Khulna' || parsed.address === 'Plot 42, Road 11, Block D, Gulshan-2, Dhaka 1212') {
+          parsed.address = INITIAL_SETTINGS.address;
+        }
+        if (parsed.phone === '01712345678' || parsed.phone === '+880 1711-234567') {
+          parsed.phone = INITIAL_SETTINGS.phone;
+        }
+        if (parsed.binNumber === 'BIN-002938471-0102') {
+          parsed.binNumber = INITIAL_SETTINGS.binNumber;
+        }
+        state.settings = { ...INITIAL_SETTINGS, ...parsed };
       } catch {
         state.settings = INITIAL_SETTINGS;
       }
     }
     if (d) state.drawerLogs = JSON.parse(d);
-    if (q) state.outboxQueue = JSON.parse(q);
+    if (q) {
+      try {
+        const parsedQ = JSON.parse(q);
+        // Clean out any stale UPDATE_SETTINGS mutations that failed due to missing columns
+        state.outboxQueue = Array.isArray(parsedQ)
+          ? parsedQ.filter(
+              (item: OutboxItem) =>
+                !(item.type === 'UPDATE_SETTINGS' && (item.lastError?.includes('receipt_cut_mode') || item.lastError?.includes('receipt_copies')))
+            )
+          : [];
+      } catch {
+        state.outboxQueue = [];
+      }
+    }
     if (e) state.expenses = JSON.parse(e);
     else state.expenses = [];
 
@@ -975,10 +1001,16 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (settings.autoKickDrawerOnCash !== undefined) dbSettings.auto_kick_drawer_on_cash = settings.autoKickDrawerOnCash;
       if (settings.drawerKickCodeHex !== undefined) dbSettings.drawer_kick_code_hex = settings.drawerKickCodeHex;
       if (settings.receiptFooterMessage !== undefined) dbSettings.receipt_footer_message = settings.receiptFooterMessage;
-      if (settings.receiptCopies !== undefined) dbSettings.receipt_copies = settings.receiptCopies;
 
-      const { error } = await insforge.database.from('system_settings').upsert([dbSettings]);
-      if (error) throw new Error(error.message || 'Error updating settings');
+      // Note: Client hardware preferences (receiptCopies, receiptCutMode, autoPrintReceipt, printerType)
+      // are persisted locally in localStorage and synchronized cross-tab, avoiding schema mismatch with cloud DB.
+
+      if (Object.keys(dbSettings).length > 2) {
+        const { error } = await insforge.database.from('system_settings').upsert([dbSettings]);
+        if (error) {
+          console.warn('[DB Settings Sync] Cloud update notice:', error.message);
+        }
+      }
       break;
     }
   }
@@ -1452,7 +1484,8 @@ async function syncFromDatabase() {
           autoKickDrawerOnCash: sData.auto_kick_drawer_on_cash ?? state.settings.autoKickDrawerOnCash,
           drawerKickCodeHex: sData.drawer_kick_code_hex ?? state.settings.drawerKickCodeHex,
           receiptFooterMessage: sData.receipt_footer_message ?? state.settings.receiptFooterMessage,
-          receiptCopies: sData.receipt_copies !== null && sData.receipt_copies !== undefined ? Number(sData.receipt_copies) : (state.settings.receiptCopies ?? 3),
+          receiptCopies: state.settings.receiptCopies ?? 3,
+          receiptCutMode: state.settings.receiptCutMode || 'PAGE_BREAK',
         };
       }
     }
