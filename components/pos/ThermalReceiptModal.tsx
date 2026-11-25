@@ -208,9 +208,40 @@ export function ThermalReceiptModal({
   const [printingCopyIndex, setPrintingCopyIndex] = React.useState<number | null>(null);
   const [isPrintingSequential, setIsPrintingSequential] = React.useState(false);
   const [sequentialStatus, setSequentialStatus] = React.useState<string | null>(null);
+  const isPrintingSequentialRef = React.useRef(false);
 
   const numCopies = Math.max(1, settings?.receiptCopies ?? 3);
   const cutMode = settings?.receiptCutMode || 'PAGE_BREAK';
+
+  // Wait for browser print dialog / spooler to finish before sending next job
+  // Crucial for Mozilla Firefox & PWAs where window.print() is non-blocking
+  const waitForPrintJobComplete = (timeoutMs = 45000): Promise<void> => {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener('afterprint', onAfterPrint);
+        clearTimeout(fallbackTimer);
+        resolve();
+      };
+      const onAfterPrint = () => {
+        done();
+      };
+      window.addEventListener('afterprint', onAfterPrint, { once: true });
+      const fallbackTimer = setTimeout(done, timeoutMs);
+    });
+  };
+
+  const waitForDomPaint = (): Promise<void> => {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setTimeout(resolve, 120);
+        });
+      });
+    });
+  };
 
   const handlePrintMultiPage = () => {
     setPrintingCopyIndex(null);
@@ -222,19 +253,23 @@ export function ThermalReceiptModal({
     }, 150);
   };
 
-  const handlePrintSingle = (index: number) => {
+  const handlePrintSingle = async (index: number) => {
+    isPrintingSequentialRef.current = true;
     setPrintingCopyIndex(index);
     if (onKickDrawer) {
       onKickDrawer();
     }
-    setTimeout(() => {
-      window.print();
-      setPrintingCopyIndex(null);
-    }, 200);
+    await waitForDomPaint();
+    const afterPrintPromise = waitForPrintJobComplete();
+    window.print();
+    await afterPrintPromise;
+    setPrintingCopyIndex(null);
+    isPrintingSequentialRef.current = false;
   };
 
   const handlePrintSeparately = async () => {
-    if (isPrintingSequential) return;
+    if (isPrintingSequentialRef.current) return;
+    isPrintingSequentialRef.current = true;
     setIsPrintingSequential(true);
     if (onKickDrawer) {
       onKickDrawer();
@@ -245,16 +280,32 @@ export function ThermalReceiptModal({
         const label = getCopyLabel(i, numCopies);
         setSequentialStatus(`Printing ${label} (${i + 1}/${numCopies})...`);
         setPrintingCopyIndex(i);
-        // Wait for React DOM update with only this copy visible
-        await new Promise((resolve) => setTimeout(resolve, 250));
+
+        // Wait for React to render ONLY this single copy in the DOM
+        await waitForDomPaint();
+
+        // Listen for afterprint BEFORE calling window.print() so Firefox PWA
+        // completes/spools each job and fires the printer's auto-cutter before the next starts
+        const jobDone = waitForPrintJobComplete();
         window.print();
-        // Spooler delay between physical cuts
-        await new Promise((resolve) => setTimeout(resolve, 350));
+        await jobDone;
+
+        // Brief spooler/cutter cooldown between separate print jobs
+        if (i < numCopies - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 450));
+        }
       }
     } finally {
       setPrintingCopyIndex(null);
       setIsPrintingSequential(false);
       setSequentialStatus(null);
+      isPrintingSequentialRef.current = false;
+    }
+
+    if (isAutoPrintActive) {
+      setTimeout(() => {
+        onClose();
+      }, 400);
     }
   };
 
@@ -281,11 +332,11 @@ export function ThermalReceiptModal({
     }
   }, []);
 
-  // Auto-close receipt modal once printing finishes (or in silent kiosk mode)
+  // Auto-close receipt modal once single-job printing finishes
   React.useEffect(() => {
     const handleAfterPrint = () => {
-      // Don't auto-close prematurely if we are in the middle of printing multiple copies sequentially
-      if (isPrintingSequential) return;
+      // Never auto-close prematurely while sequential separate-job printing is running
+      if (isPrintingSequentialRef.current || isPrintingSequential) return;
 
       const closeTimer = setTimeout(() => {
         onClose();

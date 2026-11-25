@@ -237,6 +237,8 @@ interface DbSystemSettings {
   auto_kick_drawer_on_cash: boolean | null;
   drawer_kick_code_hex: string | null;
   receipt_footer_message: string | null;
+  receipt_copies: number | null;
+  receipt_cut_mode: string | null;
   updated_at?: string;
 }
 
@@ -998,9 +1000,11 @@ async function executeDirectMutation(type: OutboxActionType, payload: any): Prom
       if (settings.autoKickDrawerOnCash !== undefined) dbSettings.auto_kick_drawer_on_cash = settings.autoKickDrawerOnCash;
       if (settings.drawerKickCodeHex !== undefined) dbSettings.drawer_kick_code_hex = settings.drawerKickCodeHex;
       if (settings.receiptFooterMessage !== undefined) dbSettings.receipt_footer_message = settings.receiptFooterMessage;
+      if (settings.receiptCopies !== undefined) dbSettings.receipt_copies = settings.receiptCopies;
+      if (settings.receiptCutMode !== undefined) dbSettings.receipt_cut_mode = settings.receiptCutMode;
 
-      // Note: Client hardware preferences (receiptCopies, receiptCutMode, autoPrintReceipt, printerType)
-      // are persisted locally in localStorage and synchronized cross-tab, avoiding schema mismatch with cloud DB.
+      // Note: Browser-only printer/auto-print preferences (autoPrintReceipt, printerType)
+      // remain local to the terminal in localStorage.
 
       if (Object.keys(dbSettings).length > 2) {
         const { error } = await supabase.from('system_settings').upsert([dbSettings]);
@@ -1481,8 +1485,8 @@ async function syncFromDatabase() {
           autoKickDrawerOnCash: sData.auto_kick_drawer_on_cash ?? state.settings.autoKickDrawerOnCash,
           drawerKickCodeHex: sData.drawer_kick_code_hex ?? state.settings.drawerKickCodeHex,
           receiptFooterMessage: sData.receipt_footer_message ?? state.settings.receiptFooterMessage,
-          receiptCopies: state.settings.receiptCopies ?? 3,
-          receiptCutMode: state.settings.receiptCutMode || 'PAGE_BREAK',
+          receiptCopies: sData.receipt_copies !== null && sData.receipt_copies !== undefined ? Number(sData.receipt_copies) : (state.settings.receiptCopies ?? 3),
+          receiptCutMode: (sData.receipt_cut_mode === 'SEPARATE_JOBS' || sData.receipt_cut_mode === 'PAGE_BREAK') ? sData.receipt_cut_mode : (state.settings.receiptCutMode || 'PAGE_BREAK'),
         };
       }
     }
